@@ -9,8 +9,9 @@ use crate::config::Config;
 
 pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
     // ── Start background file watcher for auto-indexing ──
-    let _watcher = match Config::detect_project_root() {
-        Some(root) => match watcher::start_watcher(root.clone()) {
+    let project_root = Config::detect_project_root();
+    let _watcher = match project_root.clone() {
+        Some(ref root) => match watcher::start_watcher(root.clone()) {
             Ok(handle) => {
                 eprintln!("[codexray] Watching {} for changes...", root.display());
                 Some(handle)
@@ -25,6 +26,17 @@ pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
             None
         }
     };
+
+    // ── Run initial index in background on startup ──
+    if let Some(root) = project_root {
+        tokio::task::spawn_blocking(move || {
+            eprintln!("[codexray] Running initial index for {}...", root.display());
+            match run_cli(&["init"]) {
+                Ok(_) => eprintln!("[codexray] Initial index complete."),
+                Err(e) => eprintln!("[codexray] Initial index warning: {}", e),
+            }
+        });
+    }
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -80,7 +92,7 @@ fn handle_initialize(id: Option<Value>) -> Option<Value> {
                 "name": "codexray",
                 "version": env!("CARGO_PKG_VERSION")
             },
-            "instructions": "Code intelligence MCP server — AST-based call graph + semantic search. Use codexray_search to find symbols by name or description, codexray_callers/codexray_callees to trace call relationships, and codexray_status to check index health.\n\nTool selection:\n- codexray_init — build/update index (run first)\n- codexray_search — find symbols (name or natural language)\n- codexray_callers — who depends on this?\n- codexray_callees — what does this depend on?\n- codexray_status — is the index up to date?\n- codexray_list — list all indexed projects"
+            "instructions": "Code intelligence MCP server — AST-based call graph + semantic search. The index is built automatically on startup and updated on file changes. Use codexray_search to find symbols by name or description, codexray_callers/codexray_callees to trace call relationships, and codexray_status to check index health.\n\nTool selection:\n- codexray_search — find symbols (name or natural language)\n- codexray_callers — who depends on this?\n- codexray_callees — what does this depend on?\n- codexray_status — is the index up to date?\n- codexray_list — list all indexed projects"
         }
     }))
 }
@@ -115,9 +127,6 @@ fn handle_tools_call(id: Option<Value>, request: &Value) -> Option<Value> {
         "codexray_callees" => {
             let symbol = arguments.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
             run_cli(&["callees", symbol, "--json"])
-        }
-        "codexray_init" => {
-            run_cli(&["init"])
         }
         "codexray_list" => {
             run_cli(&["list", "--json"])

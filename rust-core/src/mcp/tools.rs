@@ -60,14 +60,6 @@ pub fn all_tools() -> Vec<Tool> {
             }),
         },
         Tool {
-            name: "codexray_init".into(),
-            description: "构建或更新当前项目的代码索引。首次使用其他 codexray 工具前必须先运行此命令。幂等操作 — 后续运行仅重新处理已更改的文件。".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {}
-            }),
-        },
-        Tool {
             name: "codexray_list".into(),
             description: "列出所有已被 codexray 索引的项目。返回项目根路径列表。".into(),
             input_schema: serde_json::json!({
