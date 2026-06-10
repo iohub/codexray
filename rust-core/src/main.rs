@@ -38,6 +38,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Search { .. } => {
             CodeXRayRunner::run(cli, config).await?;
         }
+        Commands::Explore { .. } => {
+            CodeXRayRunner::run(cli, config).await?;
+        }
         Commands::Callers { .. } => {
             CodeXRayRunner::run(cli, config).await?;
         }
@@ -261,9 +264,11 @@ fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("  ✓ CodeXray MCP server registered for Claude Code.");
     println!("  Restart Claude Code to apply. The following tools become available:\n");
-    println!("    codexray_search   — find functions/classes by name or description");
+    println!("    codexray_explore  — explore a concept: search + callers + callees combined");
+    println!("    codexray_search   — find code by behavior/purpose (semantic search)");
+    println!("    codexray_find     — find code symbols by name");
     println!("    codexray_callers  — find all callers of a function/method");
-    println!("    codexray_callees  — find all callees (dependencies) of a function/method");
+    println!("    codexray_callees  — find all callees (dependencies) of a function");
     println!("    codexray_status   — index health check");
     println!("    codexray_list     — list indexed projects");
 

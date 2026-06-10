@@ -4,6 +4,7 @@
 //! from stdin and responds on stdout. Exposes the CLI commands as MCP
 //! tools that Claude Code / Codex can discover and call.
 
+pub mod claude_md;
 pub mod server;
 pub mod tools;
 pub mod watcher;

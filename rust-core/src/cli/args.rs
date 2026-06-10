@@ -69,6 +69,14 @@ pub enum Commands {
         #[clap(long, action)]
         json: bool,
     },
+    /// Explore a concept: search + callers/callees combined (for MCP explore tool)
+    Explore {
+        /// Concept or feature to explore
+        query: String,
+        /// Max functions to explore
+        #[clap(short, long, default_value = "5")]
+        limit: usize,
+    },
     /// Delete the current project's index data
     Uninit {
         /// Skip confirmation prompt

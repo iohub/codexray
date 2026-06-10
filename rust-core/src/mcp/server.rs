@@ -5,11 +5,23 @@ use std::io::{self, BufRead, Write};
 use serde_json::{Value, json};
 use super::tools::all_tools;
 use super::watcher;
+use super::claude_md;
 use crate::config::Config;
 
 pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
-    // ── Start background file watcher for auto-indexing ──
+    // ── Detect project root ──
     let project_root = Config::detect_project_root();
+
+    // ── Inject CLAUDE.md instructions ──
+    if let Some(ref root) = project_root {
+        match claude_md::inject_claude_md(root) {
+            Ok(true) => eprintln!("[codexray] Injected codexray instructions into CLAUDE.md"),
+            Ok(false) => {} // already present
+            Err(e) => eprintln!("[codexray] CLAUDE.md injection skipped: {}", e),
+        }
+    }
+
+    // ── Start background file watcher for auto-indexing ──
     let _watcher = match project_root.clone() {
         Some(ref root) => match watcher::start_watcher(root.clone()) {
             Ok(handle) => {
@@ -55,7 +67,7 @@ pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
 
         let response = match method {
             "initialize" => handle_initialize(id),
-            "notifications/initialized" => None, // no response for notifications
+            "notifications/initialized" => None,
             "tools/list" => handle_tools_list(id),
             "tools/call" => handle_tools_call(id, &request),
             _ => {
@@ -92,7 +104,22 @@ fn handle_initialize(id: Option<Value>) -> Option<Value> {
                 "name": "codexray",
                 "version": env!("CARGO_PKG_VERSION")
             },
-            "instructions": "Code intelligence MCP server — AST-based call graph + semantic search. The index is built automatically on startup and updated on file changes.\n\nIMPORTANT — codexray tools understand code structure (functions, classes, methods) and their real relationships. Unlike text-based search (grep, Glob, Grep) which only matches strings, codexray parses the AST and builds a call graph, so it finds actual code symbols and their true caller/callee relationships. For ANY task involving finding or understanding code, use codexray tools FIRST — they are more accurate and faster than text search.\n\nWhen to use each tool:\n- codexray_search — find functions, classes, methods by name OR natural language description (e.g., \"authentication handler\", \"token validation\", \"parseConfig\"). This is the PRIMARY code search tool. Use this INSTEAD of grep for locating code symbols.\n- codexray_callers — who calls this function? Use BEFORE modifying or deleting any function to assess impact.\n- codexray_callees — what does this function call? Use to understand a function's dependencies.\n- codexray_status — is the index up to date and healthy?\n- codexray_list — list all indexed projects"
+            "instructions": concat!(
+                "Code intelligence MCP server — AST-based call graph + hybrid BM25+vector search.\n",
+                "The index is built automatically on startup and updated on file changes.\n",
+                "\n",
+                "TOOL SELECTION (strict priority order):\n",
+                "1. codexray_explore — FIRST for \"how does X work\" questions\n",
+                "2. codexray_search  — FIRST for finding code by behavior/purpose\n",
+                "3. codexray_find    — FIRST for finding code by name\n",
+                "4. codexray_callers — REQUIRED before modifying/deleting any function\n",
+                "5. codexray_callees — to understand internal dependencies\n",
+                "6. Grep — ONLY for exact string literals (error messages, UUIDs, log formats)\n",
+                "7. Glob — ONLY when you already know the exact filename\n",
+                "\n",
+                "WRONG: user asks \"how does indexing work\" → grep/find → read 10 files manually\n",
+                "RIGHT: user asks \"how does indexing work\" → codexray_explore(\"code indexing\") → immediate answer"
+            )
         }
     }))
 }
@@ -115,10 +142,15 @@ fn handle_tools_call(id: Option<Value>, request: &Value) -> Option<Value> {
     let arguments = params.get("arguments").unwrap_or(&default_args);
 
     let result = match tool_name {
-        "codexray_search" => {
+        "codexray_search" | "codexray_find" => {
             let query = arguments.get("query").and_then(|v| v.as_str()).unwrap_or("");
             let limit = arguments.get("limit").and_then(|v| v.as_u64()).unwrap_or(10);
             run_cli(&["search", query, "--limit", &limit.to_string(), "--json"])
+        }
+        "codexray_explore" => {
+            let query = arguments.get("query").and_then(|v| v.as_str()).unwrap_or("");
+            let limit = arguments.get("limit").and_then(|v| v.as_u64()).unwrap_or(5);
+            run_cli(&["explore", query, "--limit", &limit.to_string()])
         }
         "codexray_callers" => {
             let symbol = arguments.get("symbol").and_then(|v| v.as_str()).unwrap_or("");

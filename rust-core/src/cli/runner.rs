@@ -11,6 +11,7 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{info, warn};
+use serde_json::Value;
 
 use super::args::{Cli, Commands};
 
@@ -312,6 +313,114 @@ impl CodeXRayRunner {
                     }
                     _ => {
                         println!("No index found. Run 'codexray init' first.");
+                    }
+                }
+            }
+            Commands::Explore { query, limit } => {
+                let project_root = detect_project()?;
+                let (_index_dir, lock_path) = project_paths(&project_root);
+                let _lock = FileLock::shared(lock_path)?;
+                let project_hash = Config::compute_project_hash(&project_root);
+
+                let storage = Arc::new(StorageManager::new());
+                match storage.get_persistence().load_graph(&project_hash) {
+                    Ok(Some(graph)) => {
+                        // Find matching functions
+                        let functions = graph.find_functions_by_name(&query);
+                        let mut output = Vec::new();
+
+                        let count = functions.len().min(limit);
+                        for func in functions.iter().take(limit) {
+                            let callers: Vec<_> = graph.get_callers(&func.id)
+                                .into_iter()
+                                .map(|(c, r)| serde_json::json!({
+                                    "name": c.name,
+                                    "file": c.file_path,
+                                    "line": r.line_number,
+                                }))
+                                .collect();
+
+                            let callees: Vec<_> = graph.get_callees(&func.id)
+                                .into_iter()
+                                .map(|(c, r)| serde_json::json!({
+                                    "name": c.name,
+                                    "file": c.file_path,
+                                    "line": r.line_number,
+                                }))
+                                .collect();
+
+                            output.push(serde_json::json!({
+                                "symbol": func.name,
+                                "file": func.file_path,
+                                "line_start": func.line_start,
+                                "line_end": func.line_end,
+                                "language": func.language,
+                                "signature": func.signature,
+                                "namespace": func.namespace,
+                                "callers": callers,
+                                "callees": callees,
+                                "caller_count": callers.len(),
+                                "callee_count": callees.len(),
+                            }));
+                        }
+
+                        // If no exact name match, try semantic search via CLI
+                        if output.is_empty() {
+                            let search_output = run_cli_search(&query, limit * 2)?;
+                            let search_results: Vec<Value> = serde_json::from_str(&search_output)
+                                .unwrap_or_default();
+
+                            for result in search_results.iter().take(limit) {
+                                let name = result["symbol_name"].as_str().unwrap_or("");
+                                let _file = result["file_path"].as_str().unwrap_or("");
+                                let funcs = graph.find_functions_by_name(name);
+                                if let Some(func) = funcs.first() {
+                                    let callers: Vec<_> = graph.get_callers(&func.id)
+                                        .into_iter()
+                                        .map(|(c, r)| serde_json::json!({
+                                            "name": c.name,
+                                            "file": c.file_path,
+                                            "line": r.line_number,
+                                        }))
+                                        .collect();
+                                    let callees: Vec<_> = graph.get_callees(&func.id)
+                                        .into_iter()
+                                        .map(|(c, r)| serde_json::json!({
+                                            "name": c.name,
+                                            "file": c.file_path,
+                                            "line": r.line_number,
+                                        }))
+                                        .collect();
+                                    output.push(serde_json::json!({
+                                        "symbol": func.name,
+                                        "file": func.file_path,
+                                        "line_start": func.line_start,
+                                        "line_end": func.line_end,
+                                        "language": func.language,
+                                        "signature": func.signature,
+                                        "namespace": func.namespace,
+                                        "callers": callers,
+                                        "callees": callees,
+                                        "caller_count": callers.len(),
+                                        "callee_count": callees.len(),
+                                    }));
+                                }
+                            }
+                        }
+
+                        let summary = serde_json::json!({
+                            "query": query,
+                            "explored": count,
+                            "results": output,
+                        });
+                        println!("{}", serde_json::to_string_pretty(&summary)?);
+                    }
+                    _ => {
+                        println!("{}", serde_json::json!({
+                            "error": "No index found. Run 'codexray init' first.",
+                            "query": query,
+                            "results": []
+                        }));
                     }
                 }
             }
@@ -737,9 +846,11 @@ fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("  CodeXRay MCP server registered for Claude Code.");
     println!("  Restart Claude Code to apply. The following tools become available:\n");
-    println!("    codexray_search   — find functions/classes by name or description (primary search tool)");
+    println!("    codexray_explore  — explore a concept: search + callers + callees combined");
+    println!("    codexray_search   — find code by behavior/purpose (semantic search)");
+    println!("    codexray_find     — find code symbols by name");
     println!("    codexray_callers  — find all callers of a function/method");
-    println!("    codexray_callees  — find all callees (dependencies) of a function/method");
+    println!("    codexray_callees  — find all callees (dependencies) of a function");
     println!("    codexray_status   — index health check");
     println!("    codexray_list     — list indexed projects");
 
@@ -903,6 +1014,24 @@ fn run_index_sync(project_root: &std::path::Path) -> Result<(), String> {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("codexray init failed: {}", stderr.trim()))
+    }
+}
+
+/// Run the search subprocess for the explore fallback path.
+fn run_cli_search(query: &str, limit: usize) -> Result<String, String> {
+    let bin = std::env::current_exe().map_err(|e| format!("Cannot find binary: {}", e))?;
+    let output = std::process::Command::new(&bin)
+        .args(["search", query, "--limit", &limit.to_string(), "--json"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(|e| format!("Failed to run codexray search: {}", e))?;
+
+    if output.status.success() {
+        String::from_utf8(output.stdout).map_err(|e| format!("Invalid UTF-8: {}", e))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Search failed: {}", stderr.trim()))
     }
 }
 
