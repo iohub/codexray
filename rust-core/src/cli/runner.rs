@@ -329,7 +329,6 @@ impl CodeXRayRunner {
                         let functions = graph.find_functions_by_name(&query);
                         let mut output = Vec::new();
 
-                        let count = functions.len().min(limit);
                         for func in functions.iter().take(limit) {
                             let callers: Vec<_> = graph.get_callers(&func.id)
                                 .into_iter()
@@ -410,7 +409,7 @@ impl CodeXRayRunner {
 
                         let summary = serde_json::json!({
                             "query": query,
-                            "explored": count,
+                            "explored": output.len(),
                             "results": output,
                         });
                         println!("{}", serde_json::to_string_pretty(&summary)?);

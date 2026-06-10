@@ -118,7 +118,12 @@ fn handle_initialize(id: Option<Value>) -> Option<Value> {
                 "7. Glob — ONLY when you already know the exact filename\n",
                 "\n",
                 "WRONG: user asks \"how does indexing work\" → grep/find → read 10 files manually\n",
-                "RIGHT: user asks \"how does indexing work\" → codexray_explore(\"code indexing\") → immediate answer"
+                "RIGHT: user asks \"how does indexing work\" → codexray_explore(\"code indexing\") → immediate answer\n",
+                "\n",
+                "CRITICAL — always relay results to the user:\n",
+                "After every codexray tool call, summarize what was found in your response.\n",
+                "Tell the user: how many results, key function names, and relevant file paths.\n",
+                "Never use a codexray tool silently."
             )
         }
     }))
@@ -171,15 +176,11 @@ fn handle_tools_call(id: Option<Value>, request: &Value) -> Option<Value> {
 
     match result {
         Ok(output) => {
-            let content = if let Ok(parsed) = serde_json::from_str::<Value>(&output) {
-                json!([{ "type": "text", "text": serde_json::to_string_pretty(&parsed).unwrap_or(output) }])
-            } else {
-                json!([{ "type": "text", "text": output }])
-            };
+            let text = format_tool_result(tool_name, &output);
             Some(json!({
                 "jsonrpc": "2.0",
                 "id": id,
-                "result": { "content": content }
+                "result": { "content": [{ "type": "text", "text": text }] }
             }))
         }
         Err(e) => {
@@ -193,6 +194,173 @@ fn handle_tools_call(id: Option<Value>, request: &Value) -> Option<Value> {
             }))
         }
     }
+}
+
+// ── Output formatting (JSON → human-readable for Claude Code display) ──────
+
+/// Transform raw CLI JSON output into concise, scannable text.
+/// Each tool gets its own formatter so results are immediately useful in chat.
+fn format_tool_result(tool_name: &str, output: &str) -> String {
+    let parsed: Value = match serde_json::from_str(output) {
+        Ok(v) => v,
+        Err(_) => return output.to_string(),
+    };
+    match tool_name {
+        "codexray_search" | "codexray_find" => format_search(tool_name, &parsed),
+        "codexray_explore" => format_explore(&parsed),
+        "codexray_callers" => format_callers(&parsed),
+        "codexray_callees" => format_callees(&parsed),
+        "codexray_list" => format_list(&parsed),
+        "codexray_status" => format_status(&parsed),
+        _ => output.to_string(),
+    }
+}
+
+fn format_search(tool_name: &str, results: &Value) -> String {
+    let arr = results.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+    let label = if tool_name == "codexray_find" { "Find" } else { "Search" };
+    let mut out = format!("{} results: {} found\n", label, arr.len());
+
+    if arr.is_empty() {
+        out.push_str("\n(no matches)\n");
+        return out;
+    }
+
+    for (i, r) in arr.iter().enumerate() {
+        let name = r["symbol_name"].as_str()
+            .or_else(|| r["name"].as_str())
+            .unwrap_or("?");
+        let file = r["file_path"].as_str().unwrap_or("?");
+        let line = r["line_start"].as_u64().unwrap_or(0);
+        let lang = r["language"].as_str().unwrap_or("");
+        let score = r["final_score"].as_f64();
+
+        let lang_tag = if lang.is_empty() { String::new() } else { format!("  {}", lang) };
+        let score_tag = score.map_or(String::new(), |s| format!("  score={:.4}", s));
+
+        out.push_str(&format!(
+            "\n{}. {}{}{}\n   {}:{}\n",
+            i + 1, name, lang_tag, score_tag, file, line
+        ));
+
+        if let Some(code) = r["code_block"].as_str() {
+            let first_line = code.lines().next().unwrap_or("");
+            if !first_line.is_empty() {
+                out.push_str(&format!("   {}\n", first_line));
+            }
+        }
+    }
+    out
+}
+
+fn format_explore(result: &Value) -> String {
+    let query = result["query"].as_str().unwrap_or("?");
+    let results = result["results"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+
+    let mut out = format!("Explore: \"{}\" — {} functions\n", query, results.len());
+
+    if results.is_empty() {
+        out.push_str("\n(no matches)\n");
+        return out;
+    }
+
+    for (i, r) in results.iter().enumerate() {
+        let symbol = r["symbol"].as_str().unwrap_or("?");
+        let file = r["file"].as_str().unwrap_or("?");
+        let line = r["line_start"].as_u64().unwrap_or(0);
+        let lang = r["language"].as_str().unwrap_or("");
+        let sig = r["signature"].as_str().unwrap_or("");
+
+        out.push_str(&format!("\n{}. {}  {}\n   {}:{}\n", i + 1, symbol, lang, file, line));
+        if !sig.is_empty() {
+            out.push_str(&format!("   {}\n", sig));
+        }
+
+        let callers = r["callers"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+        let callees = r["callees"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+
+        if !callers.is_empty() {
+            let names: Vec<_> = callers.iter()
+                .filter_map(|c| c["name"].as_str())
+                .collect();
+            out.push_str(&format!("   callers ({}): {}\n", names.len(), names.join(", ")));
+        }
+        if !callees.is_empty() {
+            let names: Vec<_> = callees.iter()
+                .filter_map(|c| c["name"].as_str())
+                .collect();
+            out.push_str(&format!("   callees ({}): {}\n", names.len(), names.join(", ")));
+        }
+    }
+    out
+}
+
+fn format_callers(results: &Value) -> String {
+    let arr = results.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+    let target = arr.first()
+        .and_then(|r| r["target"].as_str())
+        .unwrap_or("?");
+
+    let mut out = format!("Callers of \"{}\" — {} found\n", target, arr.len());
+
+    for (i, r) in arr.iter().enumerate() {
+        let caller = r["caller"].as_str().unwrap_or("?");
+        let file = r["caller_file"].as_str().unwrap_or("?");
+        let line = r["caller_line"].as_u64().unwrap_or(0);
+        out.push_str(&format!("\n{}. {}  {}:{}\n", i + 1, caller, file, line));
+    }
+    out
+}
+
+fn format_callees(results: &Value) -> String {
+    let arr = results.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+    let caller = arr.first()
+        .and_then(|r| r["caller"].as_str())
+        .unwrap_or("?");
+
+    let mut out = format!("Callees of \"{}\" — {} found\n", caller, arr.len());
+
+    for (i, r) in arr.iter().enumerate() {
+        let callee = r["callee"].as_str().unwrap_or("?");
+        let file = r["callee_file"].as_str().unwrap_or("?");
+        let line = r["callee_line"].as_u64().unwrap_or(0);
+        out.push_str(&format!("\n{}. {}  {}:{}\n", i + 1, callee, file, line));
+    }
+    out
+}
+
+fn format_list(projects: &Value) -> String {
+    let arr = projects.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+    let mut out = format!("Indexed projects: {}\n", arr.len());
+
+    for (i, p) in arr.iter().enumerate() {
+        let root = p["project_root"].as_str().unwrap_or("?");
+        let hash = p["hash"].as_str().unwrap_or("?");
+        let indexed = p["indexed_at"].as_str().unwrap_or("?");
+        out.push_str(&format!(
+            "\n{}. {}\n   {}  {}\n",
+            i + 1,
+            root,
+            &hash[..8.min(hash.len())],
+            indexed,
+        ));
+    }
+    out
+}
+
+fn format_status(status: &Value) -> String {
+    let root = status["project_root"].as_str().unwrap_or("?");
+    let indexed = status["indexed"].as_bool().unwrap_or(false);
+    let functions = status["total_functions"].as_u64().unwrap_or(0);
+    let files = status["total_files"].as_u64().unwrap_or(0);
+
+    format!(
+        "Index status for {}\n  indexed:    {}\n  functions:  {}\n  files:      {}\n",
+        root,
+        if indexed { "yes" } else { "no" },
+        functions,
+        files,
+    )
 }
 
 /// Run the codexray CLI binary and capture its stdout.
