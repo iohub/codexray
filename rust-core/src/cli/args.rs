@@ -107,4 +107,10 @@ pub enum Commands {
     },
     /// Install git hooks (post-commit, post-merge → codexray init)
     InstallHooks,
+    /// Start background daemon: watch files and auto-index in real-time
+    Daemon {
+        /// Run in background (fork and detach)
+        #[clap(long, action)]
+        background: bool,
+    },
 }

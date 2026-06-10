@@ -30,6 +30,24 @@ function ensureDir(dir: string): void {
   }
 }
 
+/**
+ * Check if we're being launched as an MCP server (serve --mcp).
+ * In MCP mode, stdout must contain only JSON-RPC messages, so all
+ * status/diagnostic output must go to stderr.
+ */
+function isMcpMode(): boolean {
+  const args = process.argv.slice(2);
+  return args.includes("serve") && args.includes("--mcp");
+}
+
+function logStatus(msg: string): void {
+  if (isMcpMode()) {
+    console.error(msg);
+  } else {
+    console.log(msg);
+  }
+}
+
 function configExists(): boolean {
   return fs.existsSync(CONFIG_PATH);
 }
@@ -154,15 +172,25 @@ async function runSetupWizard(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  const mcpMode = isMcpMode();
+
   // Step 1: Check config
   if (!configExists()) {
-    console.log("First time setup — configuring CodeXray...");
+    if (mcpMode) {
+      console.error("CodeXray config not found. Run 'codexray' first to set up.");
+      process.exit(1);
+    }
+    logStatus("First time setup — configuring CodeXRay...");
     await runSetupWizard();
   }
 
   // Step 2: Check binary
   if (!binaryExists()) {
-    console.log("Downloading CodeXray binary...");
+    if (mcpMode) {
+      console.error("CodeXray binary not found. Run 'codexray' first to download it.");
+      process.exit(1);
+    }
+    logStatus("Downloading CodeXray binary...");
     ensureDir(BIN_DIR);
     try {
       await downloadBinary(BIN_PATH);

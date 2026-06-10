@@ -61,5 +61,9 @@ openssl-sys = { version = "0.9", features = ["vendored"] }
 # 文件系统监控 (MCP server 自动索引)
 notify = "7"
 
+# Unix daemon support (fork, setsid)
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tempfile = "3.8"

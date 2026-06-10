@@ -67,6 +67,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             uninstall_from_claude(scope)?;
             uninstall_from_codex()?;
         }
+        Commands::Daemon { background } => {
+            if *background && !cfg!(unix) {
+                eprintln!("Background mode is only supported on Unix platforms.");
+                return Ok(());
+            }
+            CodeXRayRunner::run(cli, config).await?;
+        }
         Commands::InstallHooks => {
             let project_root = detect_project()?;
             let git_dir = project_root.join(".git");
@@ -133,7 +140,15 @@ fn resolve_scope(local: bool, _global: bool) -> Scope {
 }
 
 fn codexray_bin() -> String {
-    "codexray".to_string()
+    let bin_name = if cfg!(target_os = "windows") {
+        "codexray.exe"
+    } else {
+        "codexray"
+    };
+    Config::bin_dir()
+        .join(bin_name)
+        .to_string_lossy()
+        .to_string()
 }
 
 fn mcp_server_entry() -> serde_json::Value {
@@ -200,7 +215,7 @@ fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("  [create] MCP config: {}", mcp_path.display());
     }
-    println!("    entry: codexray serve --mcp");
+    println!("    entry: {} serve --mcp", codexray_bin());
 
     // 2. Write permissions
     let mut settings: serde_json::Value = if settings_path.exists() {
@@ -241,6 +256,13 @@ fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("  [skip] Permissions already configured: {}", settings_path.display());
     }
+    // 3. Install daemon auto-start (systemd user service, global only)
+    if scope == Scope::Global {
+        if let Err(e) = codexray::cli::runner::install_daemon_service() {
+            eprintln!("  [warn] Daemon service setup skipped: {}", e);
+        }
+    }
+
 
     println!();
     println!("  ✓ CodeXray MCP server registered for Claude Code.");

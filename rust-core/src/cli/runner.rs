@@ -399,6 +399,52 @@ impl CodeXRayRunner {
                 uninstall_from_claude(scope)?;
                 uninstall_from_codex()?;
             }
+            Commands::Daemon { background } => {
+                if background {
+                    // Fork to background
+                    daemonize()?;
+                }
+
+                let project_root = detect_project()?;
+                let (index_dir, _) = project_paths(&project_root);
+
+                eprintln!("╔══════════════════════════════════════════════╗");
+                eprintln!("║       CodeXray Daemon                        ║");
+                eprintln!("╠══════════════════════════════════════════════╣");
+                eprintln!("║  Project:   {:<34}║", project_root.display().to_string().chars().take(34).collect::<String>());
+                eprintln!("║  Index:     {:<34}║", index_dir.display().to_string().chars().take(34).collect::<String>());
+                eprintln!("║  PID:       {:<34}║", std::process::id());
+                eprintln!("╚══════════════════════════════════════════════╝");
+                eprintln!();
+                eprintln!("[codexray-daemon] Watching for file changes...");
+                eprintln!("[codexray-daemon] Auto-indexing on changes (8s debounce).");
+                eprintln!();
+
+                // Run initial index
+                eprintln!("[codexray-daemon] Running initial index...");
+                if let Err(e) = run_index_sync(&project_root) {
+                    eprintln!("[codexray-daemon] Initial index failed: {}", e);
+                } else {
+                    eprintln!("[codexray-daemon] Initial index complete.");
+                }
+
+                // Start file watcher and block forever
+                match crate::mcp::watcher::start_watcher(project_root.clone()) {
+                    Ok(_handle) => {
+                        eprintln!("[codexray-daemon] Watcher started for {}", project_root.display());
+
+                        // Block forever — watcher handles re-indexing
+                        loop {
+                            std::thread::park();
+                        }
+                        // Note: handle is never dropped here, so watcher runs forever
+                        // In practice, SIGTERM/SIGINT will kill the process
+                    }
+                    Err(e) => {
+                        return Err(format!("Failed to start watcher: {}", e).into());
+                    }
+                }
+            }
             Commands::InstallHooks => {
                 let project_root = detect_project()?;
                 let git_dir = project_root.join(".git");
@@ -564,7 +610,15 @@ fn resolve_scope(local: bool, _global: bool) -> Scope {
 }
 
 fn codexray_bin() -> String {
-    "codexray".to_string()
+    let bin_name = if cfg!(target_os = "windows") {
+        "codexray.exe"
+    } else {
+        "codexray"
+    };
+    Config::bin_dir()
+        .join(bin_name)
+        .to_string_lossy()
+        .to_string()
 }
 
 fn mcp_server_entry() -> serde_json::Value {
@@ -631,7 +685,7 @@ fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("  [create] MCP config: {}", mcp_path.display());
     }
-    println!("    entry: codexray serve --mcp");
+    println!("    entry: {} serve --mcp", codexray_bin());
 
     // 2. Write permissions
     let mut settings: serde_json::Value = if settings_path.exists() {
@@ -669,6 +723,11 @@ fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
         println!("    added: Bash(codexray *)");
     } else {
         println!("  [skip] Permissions already configured: {}", settings_path.display());
+    }
+
+    // 3. Install daemon auto-start (systemd user service)
+    if scope == Scope::Global {
+        install_daemon_service()?;
     }
 
     println!();
@@ -773,6 +832,143 @@ fn uninstall_from_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>>
 
     println!();
     println!("  CodeXRay MCP server unregistered from Claude Code.");
+    Ok(())
+}
+
+/// Daemonize the process (Unix: double-fork to background).
+#[cfg(unix)]
+fn daemonize() -> Result<(), Box<dyn std::error::Error>> {
+    // First fork
+    let pid = unsafe { libc::fork() };
+    if pid < 0 {
+        return Err("fork failed".into());
+    }
+    if pid > 0 {
+        // Parent exits
+        std::process::exit(0);
+    }
+
+    // Create new session
+    if unsafe { libc::setsid() } < 0 {
+        return Err("setsid failed".into());
+    }
+
+    // Second fork
+    let pid = unsafe { libc::fork() };
+    if pid < 0 {
+        return Err("second fork failed".into());
+    }
+    if pid > 0 {
+        std::process::exit(0);
+    }
+
+    // Close standard file descriptors
+    unsafe {
+        libc::close(0);
+        libc::close(1);
+        libc::close(2);
+        // Redirect to /dev/null
+        let devnull = libc::open(b"/dev/null\0" as *const u8 as *const libc::c_char, libc::O_RDWR);
+        libc::dup2(devnull, 0);
+        libc::dup2(devnull, 1);
+        libc::dup2(devnull, 2);
+        libc::close(devnull);
+    }
+
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn daemonize() -> Result<(), Box<dyn std::error::Error>> {
+    Err("Background mode is only supported on Unix platforms.".into())
+}
+
+/// Run `codexray init` synchronously for the given project.
+fn run_index_sync(project_root: &std::path::Path) -> Result<(), String> {
+    let bin = std::env::current_exe().map_err(|e| format!("Cannot find binary: {}", e))?;
+
+    let output = std::process::Command::new(&bin)
+        .arg("init")
+        .current_dir(project_root)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(|e| format!("Failed to run codexray init: {}", e))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("codexray init failed: {}", stderr.trim()))
+    }
+}
+
+/// Install the codexray daemon as a systemd user service.
+/// This ensures the daemon auto-starts on user login and watches
+/// the indexed project for file changes in real-time.
+pub fn install_daemon_service() -> Result<(), Box<dyn std::error::Error>> {
+    // Determine systemd user service directory
+    let systemd_user_dir = dirs::config_dir()
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".config"))
+        .join("systemd")
+        .join("user");
+
+    // Resolve the current project root for the daemon to watch
+    let project_root = match Config::detect_project_root() {
+        Some(root) => root,
+        None => {
+            println!("  [skip] No project root found for daemon service.");
+            return Ok(());
+        }
+    };
+
+    let service_name = "codexray-daemon.service";
+    let service_path = systemd_user_dir.join(service_name);
+    let bin_path = codexray_bin();
+
+    let service_content = format!(
+        r#"[Unit]
+Description=CodeXray File Watcher Daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={bin} daemon
+WorkingDirectory={project_root}
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Environment=RUST_LOG=warn
+
+[Install]
+WantedBy=default.target
+"#,
+        bin = bin_path,
+        project_root = project_root.to_string_lossy(),
+    );
+
+    // Create directory if it doesn't exist
+    std::fs::create_dir_all(&systemd_user_dir)?;
+
+    // Write service file
+    let is_update = service_path.exists();
+    std::fs::write(&service_path, &service_content)?;
+
+    if is_update {
+        println!("  [update] Daemon service: {}", service_path.display());
+    } else {
+        println!("  [create] Daemon service: {}", service_path.display());
+    }
+
+    // Try to enable and start the service
+    println!();
+    println!("  To start the daemon now:");
+    println!("    systemctl --user daemon-reload");
+    println!("    systemctl --user enable --now codexray-daemon");
+    println!();
+    println!("  The daemon watches {} and auto-indexes on file changes.", project_root.display());
+
     Ok(())
 }
 

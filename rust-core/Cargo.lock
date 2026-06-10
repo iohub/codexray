@@ -1134,6 +1134,7 @@ dependencies = [
  "glob",
  "itertools 0.14.0",
  "lancedb",
+ "libc",
  "md5",
  "notify",
  "openssl-sys",
