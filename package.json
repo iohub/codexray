@@ -1,6 +1,6 @@
 {
   "name": "@superdl/codexray",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Code intelligence MCP server for Claude Code & Codex CLI — AST call graph analysis and hybrid semantic search (Dense + Sparse + RRF + Cross-Encoder Reranker) across 7 languages.",
   "bin": {
     "codexray": "dist/bin/codexray.js"
