@@ -1,0 +1,42 @@
+{
+  "name": "codexray",
+  "version": "0.1.0",
+  "description": "Code intelligence MCP server for Claude Code & Codex CLI — AST call graph analysis and hybrid semantic search (Dense + Sparse + RRF + Cross-Encoder Reranker) across 7 languages.",
+  "bin": "dist/bin/codexray.js",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "postinstall": "node -e \"var f='dist/install/download.js';require('fs').existsSync(f)&&require('./'+f).downloadBinary()||console.log('Run codexray to download the binary')\" || true",
+    "preuninstall": "echo 'Run codexray uninstall-hooks to clean up git hooks'",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist/"
+  ],
+  "keywords": [
+    "code-intelligence",
+    "semantic-search",
+    "call-graph",
+    "code-analysis",
+    "claude-code",
+    "mcp",
+    "codex",
+    "hybrid-search",
+    "reranker",
+    "cross-encoder",
+    "embedding",
+    "tree-sitter",
+    "bm25",
+    "lancedb",
+    "rust",
+    "cli"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "typescript": "^6.0.3"
+  }
+}
