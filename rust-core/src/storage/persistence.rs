@@ -21,16 +21,11 @@ pub struct ProjectRecord {
     pub parsed_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-struct ProjectsRegistry {
-    // key: project_id
-    projects: HashMap<String, ProjectRecord>,
-}
 
 impl PersistenceManager {
     pub fn new() -> Self {
         let home = dirs::home_dir().unwrap_or_default();
-        let base_dir = home.join(".codexray");
+        let base_dir = home.join(".codexray").join("projects");
         Self::with_storage_mode(StorageMode::default(), base_dir)
     }
 
@@ -169,10 +164,6 @@ impl PersistenceManager {
         if project_dir.exists() {
             fs::remove_dir_all(project_dir)?;
         }
-        // also remove from registry if present
-        let mut registry = self.load_registry()?;
-        registry.projects.remove(project_id);
-        self.save_registry(&registry)?;
         Ok(())
     }
 
@@ -216,58 +207,74 @@ impl PersistenceManager {
         Ok(files)
     }
 
-    // ---- Projects registry (for parsed projects) ----
+    // ---- Projects discovery (scans project directories) ----
 
-    fn registry_path(&self) -> PathBuf {
-        self.base_dir.join("projects.json")
-    }
-
-    fn load_registry(&self) -> io::Result<ProjectsRegistry> {
-        let path = self.registry_path();
-        if !path.exists() {
-            return Ok(ProjectsRegistry::default());
-        }
-        let content = fs::read_to_string(path)?;
-        let reg: ProjectsRegistry = serde_json::from_str(&content)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        Ok(reg)
-    }
-
-    fn save_registry(&self, registry: &ProjectsRegistry) -> io::Result<()> {
-        let path = self.registry_path();
-        let json = serde_json::to_string_pretty(registry)?;
-        fs::write(path, json)
-    }
-
-    pub fn register_project(&self, project_id: &str, project_dir: &str) -> io::Result<()> {
-        let mut registry = self.load_registry()?;
-        let record = ProjectRecord {
-            project_id: project_id.to_string(),
-            project_dir: project_dir.to_string(),
-            parsed_at: Utc::now(),
-        };
-        registry.projects.insert(project_id.to_string(), record);
-        self.save_registry(&registry)
+    pub fn register_project(&self, project_id: &str, _project_dir: &str) -> io::Result<()> {
+        // Ensure project directory exists (creates empty dir if needed)
+        let project_dir = self.base_dir.join(project_id);
+        fs::create_dir_all(&project_dir)?;
+        Ok(())
     }
 
     pub fn is_project_parsed(&self, project_id: &str) -> io::Result<bool> {
-        let registry = self.load_registry()?;
-        Ok(registry.projects.contains_key(project_id))
+        Ok(self.base_dir.join(project_id).exists())
     }
 
     pub fn find_project_by_dir(&self, project_dir: &str) -> io::Result<Option<String>> {
-        let registry = self.load_registry()?;
-        for (pid, rec) in registry.projects.iter() {
-            if rec.project_dir == project_dir {
-                return Ok(Some(pid.clone()));
+        if !self.base_dir.exists() {
+            return Ok(None);
+        }
+        for entry in fs::read_dir(&self.base_dir)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                continue;
+            }
+            let project_json = entry.path().join("project.json");
+            if let Ok(content) = fs::read_to_string(&project_json) {
+                if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if meta.get("project_root").and_then(|v| v.as_str()) == Some(project_dir) {
+                        return Ok(Some(entry.file_name().to_string_lossy().to_string()));
+                    }
+                }
             }
         }
         Ok(None)
     }
 
     pub fn list_parsed_projects(&self) -> io::Result<Vec<ProjectRecord>> {
-        let registry = self.load_registry()?;
-        Ok(registry.projects.values().cloned().collect())
+        let mut projects = Vec::new();
+        if !self.base_dir.exists() {
+            return Ok(projects);
+        }
+        for entry in fs::read_dir(&self.base_dir)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                continue;
+            }
+            let project_json = entry.path().join("project.json");
+            if let Ok(content) = fs::read_to_string(&project_json) {
+                if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&content) {
+                    let project_id = entry.file_name().to_string_lossy().to_string();
+                    let project_dir = meta
+                        .get("project_root")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let parsed_at = meta
+                        .get("indexed_at")
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_default();
+                    projects.push(ProjectRecord {
+                        project_id,
+                        project_dir,
+                        parsed_at,
+                    });
+                }
+            }
+        }
+        Ok(projects)
     }
 } 
 

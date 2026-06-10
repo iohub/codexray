@@ -38,7 +38,7 @@ impl StorageManager {
 
     pub fn with_storage_mode(storage_mode: StorageMode) -> Self {
         let home = dirs::home_dir().unwrap_or_default();
-        let base_dir = home.join(".codexray");
+        let base_dir = home.join(".codexray").join("projects");
 
         Self {
             persistence: Arc::new(PersistenceManager::with_storage_mode(storage_mode.clone(), base_dir)),

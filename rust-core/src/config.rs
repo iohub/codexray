@@ -186,6 +186,12 @@ impl Config {
         Self::project_index_dir(project_hash).join("tantivy_bm25")
     }
 
+    /// 全局缓存目录: ~/.codexray/cache/
+    pub fn cache_dir() -> PathBuf {
+        let home = dirs::home_dir().unwrap_or_default();
+        home.join(".codexray").join("cache")
+    }
+
     /// 加载全局配置
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
         let config_path = Self::global_config_path();

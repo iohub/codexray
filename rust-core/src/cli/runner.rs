@@ -112,11 +112,20 @@ impl CodeXRayRunner {
                                     warn!("Embedding table setup failed: {}", e);
                                     embedding_done = false;
                                 } else {
+                                    let embedding_hashes_path = index_dir.join("embedding_hashes.json");
+                                    let existing_hashes: Option<std::collections::HashMap<String, String>> = std::fs::read_to_string(&embedding_hashes_path)
+                                        .ok()
+                                        .and_then(|s| serde_json::from_str(&s).ok());
+
                                     match es.vectorize_directory(
                                         &project_root.to_string_lossy(),
-                                        None,
+                                        existing_hashes.as_ref(),
                                     ).await {
-                                        Ok(_new_hashes) => {}
+                                        Ok(new_hashes) => {
+                                            if let Ok(json) = serde_json::to_string_pretty(&new_hashes) {
+                                                let _ = std::fs::write(&embedding_hashes_path, json);
+                                            }
+                                        }
                                         Err(e) => {
                                             warn!("Embedding not available: {}. Graph-based search will be used.", e);
                                             embedding_done = false;
