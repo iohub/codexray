@@ -4,12 +4,21 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version'
+        required: false
+
+permissions:
+  contents: write
 
 jobs:
-  build-native:
-    name: Build Rust (${{ matrix.target }})
+  build:
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-apple-darwin
@@ -21,29 +30,34 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             suffix: linux-x64
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install build dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust-core"
+          key: ${{ matrix.target }}
 
-      - name: Install build dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install protobuf
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Rust binary
-        run: |
-          cd rust-core
-          cargo build --release --target ${{ matrix.target }}
+      - name: Build Rust binary (${{ matrix.target }})
+        working-directory: rust-core
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CC_x86_64_apple_darwin: clang -arch x86_64
+          MACOSX_DEPLOYMENT_TARGET: "10.15"
 
       - name: Create release archive (tar.gz)
         run: |
@@ -64,7 +78,7 @@ jobs:
           # Create tar.gz (preserves execute permissions)
           tar -czf "codexray-${{ matrix.suffix }}.tar.gz" "$BIN_DIR"
 
-          # Verify the archive
+          # Verify
           echo "Archive contents:"
           tar -tzf "codexray-${{ matrix.suffix }}.tar.gz"
 
@@ -73,41 +87,123 @@ jobs:
         with:
           name: codexray-${{ matrix.suffix }}
           path: codexray-${{ matrix.suffix }}.tar.gz
+          if-no-files-found: error
 
-  release:
-    name: Create Release
-    needs: build-native
+  musl-build:
+    name: Build linux-x64 (musl static)
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - name: Install musl tools and build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools perl make pkg-config
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust-core"
+          key: musl
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Rust binary (static musl)
+        working-directory: rust-core
+        run: |
+          export CC_x86_64_unknown_linux_musl=musl-gcc
+          export CXX_x86_64_unknown_linux_musl=musl-g++
+          cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Verify static linking
+        run: |
+          echo "=== Verifying static linking ==="
+          file rust-core/target/x86_64-unknown-linux-musl/release/codexray
+          echo ""
+          echo "=== Checking for dynamic symbols ==="
+          if command -v readelf &> /dev/null; then
+            readelf -d rust-core/target/x86_64-unknown-linux-musl/release/codexray 2>&1 | head -20 || echo "(no dynamic section = fully static)"
+          fi
+          if command -v ldd &> /dev/null; then
+            ldd rust-core/target/x86_64-unknown-linux-musl/release/codexray 2>&1 | head -10 || true
+          fi
+
+      - name: Create release archive (tar.gz)
+        run: |
+          BIN_DIR="codexray-linux-x64-musl"
+          mkdir -p "$BIN_DIR"
+
+          cp rust-core/target/x86_64-unknown-linux-musl/release/codexray "$BIN_DIR/"
+          cp rust-core/LICENSE "$BIN_DIR/" 2>/dev/null || true
+          cp rust-core/README.md "$BIN_DIR/" 2>/dev/null || true
+          cp rust-core/README_ZH.md "$BIN_DIR/" 2>/dev/null || true
+
+          chmod +x "$BIN_DIR/codexray"
+          tar -czf "codexray-linux-x64-musl.tar.gz" "$BIN_DIR"
+
+          echo "Archive contents:"
+          tar -tzf "codexray-linux-x64-musl.tar.gz"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: codexray-linux-x64-musl
+          path: codexray-linux-x64-musl.tar.gz
+          if-no-files-found: error
+
+  create-release:
+    name: Create Release
+    needs: [build, musl-build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Organize artifacts
+      - name: Organize release assets
         run: |
-          mkdir -p release
-          cp artifacts/codexray-darwin-x64/codexray-darwin-x64.tar.gz release/
-          cp artifacts/codexray-darwin-arm64/codexray-darwin-arm64.tar.gz release/
-          cp artifacts/codexray-linux-x64/codexray-linux-x64.tar.gz release/
+          set -euo pipefail
+          echo "=== Artifacts structure ==="
+          find artifacts -type f -exec ls -lh {} \;
+          echo ""
 
-          echo "Release assets:"
+          mkdir -p release
+          for dir in artifacts/*/; do
+            name="$(basename "$dir")"
+            cp "$dir/${name}.tar.gz" "release/" 2>/dev/null || true
+          done
+
+          echo "=== Release assets ==="
           ls -lh release/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: release/*
+          files: |
+            release/codexray-darwin-x64.tar.gz
+            release/codexray-darwin-arm64.tar.gz
+            release/codexray-linux-x64.tar.gz
+            release/codexray-linux-x64-musl.tar.gz
           generate_release_notes: true
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-npm:
     name: Publish to npm
-    needs: build-native
+    needs: [build, musl-build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
