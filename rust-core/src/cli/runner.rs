@@ -405,12 +405,14 @@ impl CodeXRayRunner {
                 }
                 crate::mcp::server::run_mcp_server().await?;
             }
-            Commands::Install => {
-                install_to_claude()?;
+            Commands::Install { local, global } => {
+                let scope = resolve_scope(local, global);
+                install_to_claude(scope)?;
                 install_to_codex()?;
             }
-            Commands::Uninstall => {
-                uninstall_from_claude()?;
+            Commands::Uninstall { local, global } => {
+                let scope = resolve_scope(local, global);
+                uninstall_from_claude(scope)?;
                 uninstall_from_codex()?;
             }
             Commands::InstallHooks => {
@@ -554,6 +556,29 @@ fn execute_callees(
 
 // ── MCP Install / Uninstall helpers ────────────────────────────────────
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Scope {
+    Local,
+    Global,
+}
+
+impl std::fmt::Display for Scope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Scope::Local => write!(f, "local (.mcp.json)"),
+            Scope::Global => write!(f, "global (~/.claude.json)"),
+        }
+    }
+}
+
+fn resolve_scope(local: bool, _global: bool) -> Scope {
+    if local {
+        Scope::Local
+    } else {
+        Scope::Global
+    }
+}
+
 fn codexray_bin() -> String {
     "codexray".to_string()
 }
@@ -573,29 +598,25 @@ fn claude_local_mcp_path() -> PathBuf {
     PathBuf::from(".mcp.json")
 }
 
-fn claude_settings_path(local: bool) -> PathBuf {
-    let base = if local {
-        PathBuf::from(".claude")
-    } else {
-        dirs::home_dir().unwrap_or_default().join(".claude")
-    };
-    base.join("settings.json")
+fn claude_settings_path(scope: Scope) -> PathBuf {
+    match scope {
+        Scope::Local => PathBuf::from(".claude").join("settings.json"),
+        Scope::Global => {
+            dirs::home_dir().unwrap_or_default().join(".claude").join("settings.json")
+        }
+    }
 }
 
 fn codex_config_path() -> PathBuf {
     dirs::home_dir().unwrap_or_default().join(".codex").join("config.toml")
 }
 
-fn install_to_claude() -> Result<(), Box<dyn std::error::Error>> {
-    let local = claude_local_mcp_path();
-    let (mcp_path, settings_path, _scope) = if std::env::current_dir()
-        .map(|d| d.join(".mcp.json").exists())
-        .unwrap_or(false)
-        || local.exists()
-    {
-        (local, claude_settings_path(true), "local")
-    } else {
-        (claude_global_mcp_path(), claude_settings_path(false), "global")
+fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Installing codexray MCP server to Claude Code ({})...\n", scope);
+
+    let (mcp_path, settings_path) = match scope {
+        Scope::Local => (claude_local_mcp_path(), claude_settings_path(Scope::Local)),
+        Scope::Global => (claude_global_mcp_path(), claude_settings_path(Scope::Global)),
     };
 
     // 1. Write MCP server entry
@@ -606,7 +627,12 @@ fn install_to_claude() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::json!({})
     };
 
-    if !mcp_config.get("mcpServers").is_some() {
+    let existing_entry = mcp_config
+        .get("mcpServers")
+        .and_then(|s| s.get("codexray"));
+    let is_update = existing_entry.is_some();
+
+    if mcp_config.get("mcpServers").is_none() {
         mcp_config["mcpServers"] = serde_json::json!({});
     }
     mcp_config["mcpServers"]["codexray"] = mcp_server_entry();
@@ -615,7 +641,13 @@ fn install_to_claude() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(&mcp_path, serde_json::to_string_pretty(&mcp_config)?)?;
-    println!("  MCP config -> {}", mcp_path.display());
+
+    if is_update {
+        println!("  [update] MCP config: {}", mcp_path.display());
+    } else {
+        println!("  [create] MCP config: {}", mcp_path.display());
+    }
+    println!("    entry: codexray serve --mcp");
 
     // 2. Write permissions
     let mut settings: serde_json::Value = if settings_path.exists() {
@@ -641,15 +673,29 @@ fn install_to_claude() -> Result<(), Box<dyn std::error::Error>> {
             new_allow.push(serde_json::json!(s));
         }
     }
-    settings["permissions"]["allow"] = serde_json::json!(new_allow);
 
-    if let Some(parent) = settings_path.parent() {
-        std::fs::create_dir_all(parent)?;
+    if new_allow.len() > allow.len() {
+        settings["permissions"]["allow"] = serde_json::json!(new_allow);
+
+        if let Some(parent) = settings_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&settings_path, serde_json::to_string_pretty(&settings)?)?;
+        println!("  [update] Permissions: {}", settings_path.display());
+        println!("    added: Bash(codexray *)");
+    } else {
+        println!("  [skip] Permissions already configured: {}", settings_path.display());
     }
-    std::fs::write(&settings_path, serde_json::to_string_pretty(&settings)?)?;
-    println!("  Permissions -> {}", settings_path.display());
+
     println!();
-    println!("  Restart Claude Code to apply. codexray tools will appear automatically.");
+    println!("  CodeXRay MCP server registered for Claude Code.");
+    println!("  Restart Claude Code to apply. The following tools become available:\n");
+    println!("    codexray_search   — semantic code search");
+    println!("    codexray_callers  — find callers of a symbol");
+    println!("    codexray_callees  — find callees of a symbol");
+    println!("    codexray_init     — build/update code index");
+    println!("    codexray_status   — index health check");
+    println!("    codexray_list     — list indexed projects");
 
     Ok(())
 }
@@ -659,6 +705,8 @@ fn install_to_codex() -> Result<(), Box<dyn std::error::Error>> {
     if !config_path.parent().map(|p| p.exists()).unwrap_or(false) {
         return Ok(());
     }
+
+    println!("\nInstalling codexray MCP server to Codex CLI...\n");
 
     let toml_block = format!(
         "[mcp_servers.codexray]\ncommand = \"{}\"\nargs = [\"serve\", \"--mcp\"]\n",
@@ -684,6 +732,7 @@ fn install_to_codex() -> Result<(), Box<dyn std::error::Error>> {
             updated.push_str(&existing[end..]);
         }
         std::fs::write(&config_path, updated.trim_end())?;
+        println!("  [update] Codex config: {}", config_path.display());
     } else {
         std::fs::create_dir_all(config_path.parent().unwrap())?;
         let content = if existing.is_empty() {
@@ -692,23 +741,54 @@ fn install_to_codex() -> Result<(), Box<dyn std::error::Error>> {
             format!("{}\n\n{}", existing.trim_end(), toml_block)
         };
         std::fs::write(&config_path, content)?;
+        println!("  [create] Codex config: {}", config_path.display());
     }
-
-    println!("  Codex config -> {}", config_path.display());
+    println!("  CodeXRay MCP server registered for Codex CLI.");
     Ok(())
 }
 
-fn uninstall_from_claude() -> Result<(), Box<dyn std::error::Error>> {
-    let mcp_path = claude_global_mcp_path();
+fn uninstall_from_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Removing codexray MCP server from Claude Code ({})...\n", scope);
+
+    let mcp_path = match scope {
+        Scope::Local => claude_local_mcp_path(),
+        Scope::Global => claude_global_mcp_path(),
+    };
+
+    let mut removed_mcp = false;
     if mcp_path.exists() {
         let content = std::fs::read_to_string(&mcp_path)?;
         let mut config: serde_json::Value = serde_json::from_str(&content)?;
         if config.get("mcpServers").and_then(|s| s.get("codexray")).is_some() {
-            config["mcpServers"].as_object_mut().map(|s| s.remove("codexray"));
+            config["mcpServers"]
+                .as_object_mut()
+                .map(|s| s.remove("codexray"));
             std::fs::write(&mcp_path, serde_json::to_string_pretty(&config)?)?;
-            println!("  Removed from {}", mcp_path.display());
+            println!("  [remove] MCP config: {}", mcp_path.display());
+            removed_mcp = true;
         }
     }
+    if !removed_mcp {
+        println!("  [skip] No codexray entry in {}", mcp_path.display());
+    }
+
+    // Clean up permissions
+    let settings_path = claude_settings_path(scope);
+    if settings_path.exists() {
+        let content = std::fs::read_to_string(&settings_path)?;
+        let mut settings: serde_json::Value = serde_json::from_str(&content)?;
+        if let Some(allow) = settings["permissions"]["allow"].as_array_mut() {
+            let before = allow.len();
+            allow.retain(|v| v.as_str() != Some("Bash(codexray *)"));
+            if allow.len() < before {
+                std::fs::write(&settings_path, serde_json::to_string_pretty(&settings)?)?;
+                println!("  [update] Permissions: removed Bash(codexray *)");
+            }
+        }
+    }
+
+    println!();
+    println!("  CodeXRay MCP server unregistered from Claude Code.");
     Ok(())
 }
 
@@ -728,7 +808,10 @@ fn uninstall_from_codex() -> Result<(), Box<dyn std::error::Error>> {
                 updated.push_str(&content[end..]);
             }
             std::fs::write(&config_path, updated.trim())?;
-            println!("  Removed from {}", config_path.display());
+            println!("  [remove] Codex config: {}", config_path.display());
+            println!("  CodeXRay MCP server unregistered from Codex CLI.");
+        } else {
+            println!("  [skip] No codexray entry in {}", config_path.display());
         }
     }
     Ok(())

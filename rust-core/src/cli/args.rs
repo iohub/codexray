@@ -88,9 +88,23 @@ pub enum Commands {
         mcp: bool,
     },
     /// Register codexray as MCP tools in Claude Code / Codex
-    Install,
+    Install {
+        /// Use local .mcp.json (project-level, not global ~/.claude.json)
+        #[clap(long, action)]
+        local: bool,
+        /// Use global ~/.claude.json (user-level, default)
+        #[clap(long, action)]
+        global: bool,
+    },
     /// Remove codexray MCP integration from Claude Code / Codex
-    Uninstall,
+    Uninstall {
+        /// Remove from local .mcp.json only
+        #[clap(long, action)]
+        local: bool,
+        /// Remove from global ~/.claude.json only (default)
+        #[clap(long, action)]
+        global: bool,
+    },
     /// Install git hooks (post-commit, post-merge → codexray init)
     InstallHooks,
 }
