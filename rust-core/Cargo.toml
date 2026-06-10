@@ -58,5 +58,8 @@ tantivy = "0.22"
 # 强制 openssl-sys 从源码编译 OpenSSL，支持 musl 静态链接
 openssl-sys = { version = "0.9", features = ["vendored"] }
 
+# 文件系统监控 (MCP server 自动索引)
+notify = "7"
+
 [dev-dependencies]
 tempfile = "3.8"

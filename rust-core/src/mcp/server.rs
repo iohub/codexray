@@ -4,8 +4,28 @@
 use std::io::{self, BufRead, Write};
 use serde_json::{Value, json};
 use super::tools::all_tools;
+use super::watcher;
+use crate::config::Config;
 
 pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
+    // ── Start background file watcher for auto-indexing ──
+    let _watcher = match Config::detect_project_root() {
+        Some(root) => match watcher::start_watcher(root.clone()) {
+            Ok(handle) => {
+                eprintln!("[codexray] Watching {} for changes...", root.display());
+                Some(handle)
+            }
+            Err(e) => {
+                eprintln!("[codexray] Watcher unavailable: {}", e);
+                None
+            }
+        },
+        None => {
+            eprintln!("[codexray] No project root found (no .git/). Watching disabled.");
+            None
+        }
+    };
+
     let stdin = io::stdin();
     let mut stdout = io::stdout();
 
