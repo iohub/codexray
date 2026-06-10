@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-native:
+    name: Build Rust (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            suffix: darwin-x64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            suffix: darwin-arm64
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            suffix: linux-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install protobuf
+
+      - name: Build Rust binary
+        run: |
+          cd rust-core
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Create release archive (tar.gz)
+        run: |
+          BIN_DIR="codexray-${{ matrix.suffix }}"
+          mkdir -p "$BIN_DIR"
+
+          # Copy binary
+          cp rust-core/target/${{ matrix.target }}/release/codexray "$BIN_DIR/"
+
+          # Copy docs
+          cp rust-core/LICENSE "$BIN_DIR/" 2>/dev/null || true
+          cp rust-core/README.md "$BIN_DIR/" 2>/dev/null || true
+          cp rust-core/README_ZH.md "$BIN_DIR/" 2>/dev/null || true
+
+          # Ensure execute permission is set
+          chmod +x "$BIN_DIR/codexray"
+
+          # Create tar.gz (preserves execute permissions)
+          tar -czf "codexray-${{ matrix.suffix }}.tar.gz" "$BIN_DIR"
+
+          # Verify the archive
+          echo "Archive contents:"
+          tar -tzf "codexray-${{ matrix.suffix }}.tar.gz"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: codexray-${{ matrix.suffix }}
+          path: codexray-${{ matrix.suffix }}.tar.gz
+
+  release:
+    name: Create Release
+    needs: build-native
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize artifacts
+        run: |
+          mkdir -p release
+          cp artifacts/codexray-darwin-x64/codexray-darwin-x64.tar.gz release/
+          cp artifacts/codexray-darwin-arm64/codexray-darwin-arm64.tar.gz release/
+          cp artifacts/codexray-linux-x64/codexray-linux-x64.tar.gz release/
+
+          echo "Release assets:"
+          ls -lh release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-npm:
+    name: Publish to npm
+    needs: build-native
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies & build
+        run: |
+          npm install
+          npm run build
+
+      - name: Publish
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
