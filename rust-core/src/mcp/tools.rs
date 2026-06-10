@@ -14,17 +14,17 @@ pub fn all_tools() -> Vec<Tool> {
     vec![
         Tool {
             name: "codexray_search".into(),
-            description: "语义代码搜索 — 通过自然语言或符号名称查找代码。结合向量嵌入和 BM25 全文检索，返回最相关的函数、类或方法。用于快速定位代码位置。".into(),
+            description: "Find functions, classes, or methods by name or natural language description. This is the PRIMARY code search tool — use it INSTEAD of grep, Glob, or Grep for locating code symbols. It understands code semantics (not just text matching), so you can search by what the code DOES (e.g., \"parse JSON\", \"handle authentication\") or by symbol name. Returns ranked results with signatures.".into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "搜索查询文本或符号名称（如 \"authentication\", \"handleRequest\", \"user login\"）"
+                        "description": "What to find — a function name, class name, method name, or natural language description of the functionality (e.g., \"token validation\", \"login handler\", \"parseConfig\", \"database connection pool\")"
                     },
                     "limit": {
                         "type": "number",
-                        "description": "最大返回结果数（默认: 10）",
+                        "description": "Maximum number of results to return (default: 10)",
                         "default": 10
                     }
                 },
@@ -33,13 +33,13 @@ pub fn all_tools() -> Vec<Tool> {
         },
         Tool {
             name: "codexray_callers".into(),
-            description: "调用者查询 — 列出哪些函数调用了指定符号。用于理解上游依赖和影响分析。".into(),
+            description: "Find ALL call sites of a function, method, or class — every function that depends on this symbol. Use this BEFORE modifying or deleting any function to assess impact. Unlike grep, this traces actual AST-level call relationships, not text matches.".into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "symbol": {
                         "type": "string",
-                        "description": "要查询的函数、方法或类名"
+                        "description": "The function name, method name, or class name to analyze (e.g., \"handleRequest\", \"UserService.login\")"
                     }
                 },
                 "required": ["symbol"]
@@ -47,13 +47,13 @@ pub fn all_tools() -> Vec<Tool> {
         },
         Tool {
             name: "codexray_callees".into(),
-            description: "被调用者查询 — 列出指定符号调用了哪些函数。用于理解函数的依赖关系。".into(),
+            description: "Find ALL functions, methods, or classes called BY the given symbol. Use this to understand a function's dependencies — what external services, utilities, or helpers it relies on. AST-level tracing, not text matching.".into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "symbol": {
                         "type": "string",
-                        "description": "要查询的函数、方法或类名"
+                        "description": "The function name, method name, or class name to analyze (e.g., \"handleRequest\", \"UserService.login\")"
                     }
                 },
                 "required": ["symbol"]
@@ -61,7 +61,7 @@ pub fn all_tools() -> Vec<Tool> {
         },
         Tool {
             name: "codexray_list".into(),
-            description: "列出所有已被 codexray 索引的项目。返回项目根路径列表。".into(),
+            description: "List all projects currently indexed by codexray. Use this to discover which codebases are available for search and analysis.".into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {}
@@ -69,7 +69,7 @@ pub fn all_tools() -> Vec<Tool> {
         },
         Tool {
             name: "codexray_status".into(),
-            description: "索引健康检查 — 显示当前项目的函数数、文件数、最后索引时间等信息。".into(),
+            description: "Check the health and freshness of the codexray index — number of indexed functions, files, last index time. Use this to verify the index is up-to-date before relying on search results.".into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {}

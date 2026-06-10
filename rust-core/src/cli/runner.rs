@@ -737,10 +737,9 @@ fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("  CodeXRay MCP server registered for Claude Code.");
     println!("  Restart Claude Code to apply. The following tools become available:\n");
-    println!("    codexray_search   — semantic code search");
-    println!("    codexray_callers  — find callers of a symbol");
-    println!("    codexray_callees  — find callees of a symbol");
-    println!("    codexray_init     — build/update code index");
+    println!("    codexray_search   — find functions/classes by name or description (primary search tool)");
+    println!("    codexray_callers  — find all callers of a function/method");
+    println!("    codexray_callees  — find all callees (dependencies) of a function/method");
     println!("    codexray_status   — index health check");
     println!("    codexray_list     — list indexed projects");
 
