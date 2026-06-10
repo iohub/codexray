@@ -725,11 +725,6 @@ fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
         println!("  [skip] Permissions already configured: {}", settings_path.display());
     }
 
-    // 3. Install daemon auto-start (systemd user service)
-    if scope == Scope::Global {
-        install_daemon_service()?;
-    }
-
     println!();
     println!("  CodeXRay MCP server registered for Claude Code.");
     println!("  Restart Claude Code to apply. The following tools become available:\n");
@@ -901,75 +896,6 @@ fn run_index_sync(project_root: &std::path::Path) -> Result<(), String> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("codexray init failed: {}", stderr.trim()))
     }
-}
-
-/// Install the codexray daemon as a systemd user service.
-/// This ensures the daemon auto-starts on user login and watches
-/// the indexed project for file changes in real-time.
-pub fn install_daemon_service() -> Result<(), Box<dyn std::error::Error>> {
-    // Determine systemd user service directory
-    let systemd_user_dir = dirs::config_dir()
-        .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".config"))
-        .join("systemd")
-        .join("user");
-
-    // Resolve the current project root for the daemon to watch
-    let project_root = match Config::detect_project_root() {
-        Some(root) => root,
-        None => {
-            println!("  [skip] No project root found for daemon service.");
-            return Ok(());
-        }
-    };
-
-    let service_name = "codexray-daemon.service";
-    let service_path = systemd_user_dir.join(service_name);
-    let bin_path = codexray_bin();
-
-    let service_content = format!(
-        r#"[Unit]
-Description=CodeXray File Watcher Daemon
-After=network.target
-
-[Service]
-Type=simple
-ExecStart={bin} daemon
-WorkingDirectory={project_root}
-Restart=on-failure
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-Environment=RUST_LOG=warn
-
-[Install]
-WantedBy=default.target
-"#,
-        bin = bin_path,
-        project_root = project_root.to_string_lossy(),
-    );
-
-    // Create directory if it doesn't exist
-    std::fs::create_dir_all(&systemd_user_dir)?;
-
-    // Write service file
-    let is_update = service_path.exists();
-    std::fs::write(&service_path, &service_content)?;
-
-    if is_update {
-        println!("  [update] Daemon service: {}", service_path.display());
-    } else {
-        println!("  [create] Daemon service: {}", service_path.display());
-    }
-
-    // Try to enable and start the service
-    println!();
-    println!("  To start the daemon now:");
-    println!("    systemctl --user daemon-reload");
-    println!("    systemctl --user enable --now codexray-daemon");
-    println!();
-    println!("  The daemon watches {} and auto-indexes on file changes.", project_root.display());
-
-    Ok(())
 }
 
 fn uninstall_from_codex() -> Result<(), Box<dyn std::error::Error>> {

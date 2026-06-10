@@ -256,12 +256,6 @@ fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("  [skip] Permissions already configured: {}", settings_path.display());
     }
-    // 3. Install daemon auto-start (systemd user service, global only)
-    if scope == Scope::Global {
-        if let Err(e) = codexray::cli::runner::install_daemon_service() {
-            eprintln!("  [warn] Daemon service setup skipped: {}", e);
-        }
-    }
 
 
     println!();
