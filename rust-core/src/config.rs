@@ -4,7 +4,9 @@ use std::fs;
 use std::path::PathBuf;
 use tracing::info;
 
-/// 全文检索配置
+use crate::services::hybrid_search::HybridSearchConfig as SvcHybridConfig;
+
+/// 全文检索配置（用户可见的 config.json schema）
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HybridSearchConfig {
     #[serde(default = "default_true")]
@@ -21,6 +23,9 @@ pub struct HybridSearchConfig {
     pub short_code_threshold: usize,
     #[serde(default = "default_short_code_penalty")]
     pub short_code_penalty: f64,
+    /// Timeout for the entire hybrid search operation (milliseconds). 0 = no timeout.
+    #[serde(default)]
+    pub timeout_ms: u64,
 }
 
 fn default_true() -> bool { true }
@@ -40,6 +45,22 @@ impl Default for HybridSearchConfig {
             rrf_top_k: default_20(),
             short_code_threshold: default_short_code_threshold(),
             short_code_penalty: default_short_code_penalty(),
+            timeout_ms: 0,
+        }
+    }
+}
+
+impl From<&HybridSearchConfig> for SvcHybridConfig {
+    fn from(c: &HybridSearchConfig) -> Self {
+        SvcHybridConfig {
+            enable_sparse: c.enable_bm25,
+            rrf_k: c.rrf_k,
+            dense_limit: c.vector_top_k,
+            sparse_limit: c.bm25_top_k,
+            rrf_top_k: c.rrf_top_k,
+            short_code_threshold: c.short_code_threshold,
+            short_code_penalty: c.short_code_penalty,
+            timeout_ms: c.timeout_ms,
         }
     }
 }
@@ -70,8 +91,6 @@ pub struct IndexConfig {
     #[serde(default = "default_min_code_block_length")]
     pub min_code_block_length: usize,
     #[serde(default)]
-    pub enable_reranker: bool,
-    #[serde(default)]
     pub hybrid: HybridSearchConfig,
     #[serde(default)]
     pub reranker: RerankerConfig,
@@ -88,7 +107,7 @@ pub struct RerankerConfig {
     pub model: String,
     #[serde(default)]
     pub api_token: String,
-    #[serde(default = "default_api_base_url")]
+    #[serde(default = "default_reranker_api_base_url")]
     pub api_base_url: String,
     #[serde(default = "default_10")]
     pub top_n: usize,
@@ -98,7 +117,8 @@ pub struct RerankerConfig {
     pub timeout_secs: u64,
 }
 
-fn default_reranker_model() -> String { "BAAI/bge-reranker-v2-m3".to_string() }
+fn default_reranker_model() -> String { "Qwen/Qwen3-Reranker-4B".to_string() }
+fn default_reranker_api_base_url() -> String { "https://api.siliconflow.cn/v1/rerank".to_string() }
 fn default_10() -> usize { 10 }
 fn default_5() -> usize { 5 }
 fn default_30() -> u64 { 30 }
@@ -107,17 +127,8 @@ impl Default for IndexConfig {
     fn default() -> Self {
         Self {
             min_code_block_length: default_min_code_block_length(),
-            enable_reranker: false,
             hybrid: HybridSearchConfig::default(),
-            reranker: RerankerConfig {
-                enabled: false,
-                model: default_reranker_model(),
-                api_token: String::new(),
-                api_base_url: default_api_base_url(),
-                top_n: default_10(),
-                candidate_multiplier: default_5(),
-                timeout_secs: default_30(),
-            },
+            reranker: RerankerConfig::default(),
         }
     }
 }

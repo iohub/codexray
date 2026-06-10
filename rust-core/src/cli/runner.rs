@@ -4,7 +4,7 @@ use crate::storage::lock::FileLock;
 use crate::services::CodeAnalyzer;
 use crate::services::EmbeddingService;
 use crate::services::RerankerService;
-use crate::services::hybrid_search::{HybridSearchService, HybridSearchConfig};
+use crate::services::hybrid_search::HybridSearchService;
 use crate::storage::TantivyBm25Index;
 use crate::codegraph::types::PetCodeGraph;
 use std::io::{self, Write};
@@ -199,30 +199,14 @@ impl CodeXRayRunner {
                                     HybridSearchService::with_reranker(
                                         Arc::new(es),
                                         bm25,
-                                        HybridSearchConfig {
-                                            enable_sparse: hybrid_cfg.enable_bm25,
-                                            rrf_k: hybrid_cfg.rrf_k,
-                                            dense_limit: hybrid_cfg.vector_top_k,
-                                            sparse_limit: hybrid_cfg.bm25_top_k,
-                                            short_code_threshold: hybrid_cfg.short_code_threshold,
-                                            short_code_penalty: hybrid_cfg.short_code_penalty,
-                                            ..Default::default()
-                                        },
+                                        hybrid_cfg.into(),
                                         Some(reranker),
                                     )
                                 } else {
                                     HybridSearchService::new(
                                         Arc::new(es),
                                         bm25,
-                                        HybridSearchConfig {
-                                            enable_sparse: hybrid_cfg.enable_bm25,
-                                            rrf_k: hybrid_cfg.rrf_k,
-                                            dense_limit: hybrid_cfg.vector_top_k,
-                                            sparse_limit: hybrid_cfg.bm25_top_k,
-                                            short_code_threshold: hybrid_cfg.short_code_threshold,
-                                            short_code_penalty: hybrid_cfg.short_code_penalty,
-                                            ..Default::default()
-                                        },
+                                        hybrid_cfg.into(),
                                     )
                                 };
                                 Some(hybrid.search(&query, limit).await.unwrap_or_default())
