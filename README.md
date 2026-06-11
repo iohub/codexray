@@ -1,6 +1,40 @@
 # CodeXRay
 
-**Code intelligence MCP server for Claude Code & Codex CLI.** AST-based call graph analysis + hybrid semantic search (Dense + Sparse + RRF + Cross-Encoder Reranker) — right from your terminal.
+**Code search & knowledge engine for the AI era.** Semantic + full-text hybrid search, real-time indexing, call graph + code vectors + commit vectors + knowledge vectors — unified into one native MCP server.
+
+> Built natively for Claude Code/Codex CLI — zero daemon, zero config overhead.
+
+> 📖 [中文文档](README.zh.md)
+
+## Highlights
+
+### 🧠 Hybrid Search Engine — Semantic + Full-Text Dual Channel
+
+Goes beyond keyword matching. Dense vector search understands code intent ("login logic" → `authenticateUser`), while BM25 full-text search locks in exact matches. Results are fused via RRF and re-ranked by Cross-Encoder for precision. When embedding API is unavailable, gracefully falls back to graph search — never breaks.
+
+### 🔗 4D Knowledge Graph
+
+Call graph + code vectors + commit vectors + knowledge vectors — four dimensions of codebase awareness. Tree-sitter AST parses 7 languages to build complete function/class/method relationships:
+
+- **Who calls this function?**
+- **What does this function depend on?**
+- **Find code by describing what it does**
+
+### ⚡ Real-time Incremental Indexing
+
+Full build on first run, only re-processes changed files thereafter (MD5 diff). Three trigger modes: MCP startup, git hooks, file watcher daemon. Auto-cleans orphaned embeddings — index never bloats.
+
+### 🔌 Native MCP, Local-First
+
+Built specifically for Claude Code/Codex CLI MCP stdio protocol. Install registers MCP automatically — no manual config, no persistent daemon. Starts and exits with Claude Code, zero residue. All code and data stay local, no SaaS required.
+
+### 🚀 One-Command Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iohub/codexray/main/install.sh | sh
+```
+
+Auto-detects OS, architecture, and libc. Downloads, installs, and registers MCP in one line.
 
 ## Quick Start
 
@@ -9,7 +43,7 @@
 Auto-detects your OS, architecture, and libc variant:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/superdl/codexray/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/iohub/codexray/main/install.sh | sh
 ```
 
 After the script completes, restart Claude Code — it will auto-discover codexray's MCP tools.
@@ -22,10 +56,10 @@ Pre-built binaries available for specific platforms:
 
 | Platform | Command |
 |----------|---------|
-| **macOS (Apple Silicon)** | `curl -L -o codexray.tar.gz https://github.com/superdl/codexray/releases/latest/download/codexray-darwin-arm64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-| **macOS (Intel)** | `curl -L -o codexray.tar.gz https://github.com/superdl/codexray/releases/latest/download/codexray-darwin-x64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-| **Linux (glibc)** | `curl -L -o codexray.tar.gz https://github.com/superdl/codexray/releases/latest/download/codexray-linux-x64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-| **Linux (musl)** | `curl -L -o codexray.tar.gz https://github.com/superdl/codexray/releases/latest/download/codexray-linux-x64-musl.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
+| **macOS (Apple Silicon)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-arm64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
+| **macOS (Intel)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-x64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
+| **Linux (glibc)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
+| **Linux (musl)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64-musl.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
 
 After `./codexray install`, restart Claude Code — it will auto-discover codexray's MCP tools (`codexray_explore`, `codexray_search`, `codexray_find`, `codexray_callers`, `codexray_callees`, `codexray_status`). The server auto-indexes your project on startup and gracefully exits when Claude Code closes — no daemon or manual commands needed.
 
@@ -42,21 +76,21 @@ Pre-built binaries for each release:
 | Linux | x64 (glibc) | `codexray-linux-x64.tar.gz` |
 | Linux | x64 (musl, static) | `codexray-linux-x64-musl.tar.gz` |
 
-Download the archive for your platform from the [latest release](https://github.com/superdl/codexray/releases/latest), extract it, then run `codexray install` — it will automatically complete the setup:
+Download the archive for your platform from the [latest release](https://github.com/iohub/codexray/releases/latest), extract it, then run `codexray install` — it will automatically complete the setup:
 
 ```bash
 # macOS (Apple Silicon)
-curl -L -o codexray.tar.gz https://github.com/superdl/codexray/releases/latest/download/codexray-darwin-arm64.tar.gz
+curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-arm64.tar.gz
 tar -xzf codexray.tar.gz
 ./codexray install
 
 # macOS (Intel)
-curl -L -o codexray.tar.gz https://github.com/superdl/codexray/releases/latest/download/codexray-darwin-x64.tar.gz
+curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-x64.tar.gz
 tar -xzf codexray.tar.gz
 ./codexray install
 
 # Linux (x64 glibc)
-curl -L -o codexray.tar.gz https://github.com/superdl/codexray/releases/latest/download/codexray-linux-x64.tar.gz
+curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64.tar.gz
 tar -xzf codexray.tar.gz
 ./codexray install
 ```
@@ -66,7 +100,7 @@ The `install` command registers codexray as MCP tools in Claude Code / Codex CLI
 ### From source
 
 ```bash
-git clone https://github.com/superdl/codexray.git
+git clone https://github.com/iohub/codexray.git
 cd codexray
 cargo build --release
 ```
