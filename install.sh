@@ -41,7 +41,7 @@ cleanup() {
     if [ -n "$TMPDIR" ] && [ -d "$TMPDIR" ]; then
         rm -rf "$TMPDIR"
     fi
-    if [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 0 ]; then
+    if [ "$exit_code" -ne 0 ]; then
         printf "\n"
         error "Installation failed (exit code: ${exit_code})."
         printf "  For help, open an issue at: https://github.com/${REPO}/issues\n"
@@ -271,7 +271,7 @@ main() {
         printf "  On first run, run '${BIN_NAME} install' interactively to configure your embedding API.\n"
         printf "  Graph-based search will work without configuration.\n\n"
         "$EXTRACTED_BIN" install --non-interactive 2>/dev/null || \
-        "$EXTRACTED_BIN" install << "" 2>/dev/null || true
+        "$EXTRACTED_BIN" install </dev/null 2>/dev/null || true
     fi
 
     # ── Add to PATH reminder ─────────────────────────────────────────
