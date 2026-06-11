@@ -50,21 +50,6 @@ curl -fsSL https://raw.githubusercontent.com/iohub/codexray/main/install.sh | sh
 
 ### 手动下载安装
 
-各平台预编译二进制：
-
-| 平台 | 命令 |
-|------|------|
-| **macOS (Apple Silicon)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-arm64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-| **macOS (Intel)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-x64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-| **Linux (glibc)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-| **Linux (musl)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64-musl.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-
-执行后重启 Claude Code，它将自动发现以下 MCP 工具：`codexray_explore`、`codexray_search`、`codexray_find`、`codexray_callers`、`codexray_callees`、`codexray_status`。服务器在启动时自动索引项目，在 Claude Code 关闭时优雅退出——无需守护进程或手动命令。
-
-## 安装方式
-
-### 二进制（GitHub Releases）
-
 每个版本提供预编译二进制：
 
 | 平台 | 架构 | 下载文件 |

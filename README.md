@@ -54,18 +54,7 @@ After the script completes, restart Claude Code — it will auto-discover codexr
 
 Pre-built binaries available for specific platforms:
 
-| Platform | Command |
-|----------|---------|
-| **macOS (Apple Silicon)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-arm64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-| **macOS (Intel)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-x64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-| **Linux (glibc)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-| **Linux (musl)** | `curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64-musl.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-
 After `./codexray install`, restart Claude Code — it will auto-discover codexray's MCP tools (`codexray_explore`, `codexray_search`, `codexray_find`, `codexray_callers`, `codexray_callees`, `codexray_status`). The server auto-indexes your project on startup and gracefully exits when Claude Code closes — no daemon or manual commands needed.
-
-## Install
-
-### Binary (GitHub Releases)
 
 Pre-built binaries for each release:
 
