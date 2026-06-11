@@ -28,79 +28,34 @@ Full build on first run, only re-processes changed files thereafter (MD5 diff). 
 
 Built specifically for Claude Code/Codex CLI MCP stdio protocol. Install registers MCP automatically — no manual config, no persistent daemon. Starts and exits with Claude Code, zero residue. All code and data stay local, no SaaS required.
 
-### 🚀 One-Command Install
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/iohub/codexray/main/install.sh | sh
-```
-
-Auto-detects OS, architecture, and libc. Downloads, installs, and registers MCP in one line.
-
 ## Quick Start
 
-### One-curl Install (Recommended)
-
-Auto-detects your OS, architecture, and libc variant:
+### Recommended — one curl command
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iohub/codexray/main/install.sh | sh
 ```
 
-After the script completes, restart Claude Code — it will auto-discover codexray's MCP tools.
+Auto-detects OS/arch/libc, downloads, installs, and registers MCP. Restart Claude Code after — done.
 
-> **First run:** The script runs `codexray install` interactively if you're in a terminal, or in non-interactive mode if piped. Run `codexray install` manually later to configure your embedding API for semantic search (graph-based search works without configuration).
+**First run:** `codexray install` auto-launches an interactive setup wizard for the embedding API (graph search works without configuration).
 
-### Manual Download
-
-Pre-built binaries available for specific platforms:
-
-After `./codexray install`, restart Claude Code — it will auto-discover codexray's MCP tools (`codexray_explore`, `codexray_search`, `codexray_find`, `codexray_callers`, `codexray_callees`, `codexray_status`). The server auto-indexes your project on startup and gracefully exits when Claude Code closes — no daemon or manual commands needed.
-
-Pre-built binaries for each release:
-
-| Platform | Architecture | Download |
-|----------|-------------|----------|
-| macOS | Apple Silicon (arm64) | `codexray-darwin-arm64.tar.gz` |
-| macOS | Intel (x64) | `codexray-darwin-x64.tar.gz` |
-| Linux | x64 (glibc) | `codexray-linux-x64.tar.gz` |
-| Linux | x64 (musl, static) | `codexray-linux-x64-musl.tar.gz` |
-
-Download the archive for your platform from the [latest release](https://github.com/iohub/codexray/releases/latest), extract it, then run `codexray install` — it will automatically complete the setup:
+### Manual download (Linux musl example)
 
 ```bash
-# macOS (Apple Silicon)
-curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-arm64.tar.gz
+curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64-musl.tar.gz
 tar -xzf codexray.tar.gz
-./codexray install
-
-# macOS (Intel)
-curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-x64.tar.gz
-tar -xzf codexray.tar.gz
-./codexray install
-
-# Linux (x64 glibc)
-curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64.tar.gz
-tar -xzf codexray.tar.gz
-./codexray install
+./codexray install && rm codexray.tar.gz
 ```
 
-The `install` command registers codexray as MCP tools in Claude Code / Codex CLI. On first run, `codexray` will also launch an interactive setup wizard to configure your embedding model and API token.
+Other platforms: replace `linux-x64-musl` with `darwin-arm64`, `darwin-x64`, or `linux-x64` from the [latest release](https://github.com/iohub/codexray/releases/latest).
 
 ### From source
 
 ```bash
-git clone https://github.com/iohub/codexray.git
-cd codexray
-cargo build --release
+git clone https://github.com/iohub/codexray.git && cd codexray
+cargo build --release && ./rust-core/target/release/codexray install
 ```
-
-The binary will be at `rust-core/target/release/codexray`. Run it directly:
-
-```bash
-./rust-core/target/release/codexray install
-```
-
-On first run, `./codexray install` will also launch the interactive setup wizard to configure your embedding model and API token.
 
 ## How It Works
 

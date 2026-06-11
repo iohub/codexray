@@ -26,75 +26,36 @@
 
 专为 Claude Code/Codex CLI MCP stdio 协议构建。安装即注册，无需手动配置 MCP，无需常驻守护进程。随 Claude Code 启停，零残留。代码和数据全在本地，无需 SaaS。
 
-### 🚀 一条命令安装
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/iohub/codexray/main/install.sh | sh
-```
-
-自动识别 OS、架构、libc，一键完成下载、安装、MCP 注册。
-
 ## 快速开始
 
-### 一键 curl 安装（推荐）
-
-自动识别你的 OS、架构和 libc 变体：
+### 推荐——一行 curl 命令
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iohub/codexray/main/install.sh | sh
 ```
 
-脚本执行完成后，重启 Claude Code——它会自动发现 codexray 的 MCP 工具。
+自动识别 OS/架构/libc，下载、安装、注册 MCP 一步完成。重启 Claude Code 即可。
 
-> **首次运行：** 在终端中运行脚本时会进入交互式配置向导。如果通过管道运行（非交互模式），Graph 搜索开箱即用，之后可手动运行 `codexray install` 配置 Embedding API。
+> **首次运行：** 在终端中运行脚本时会进入交互式配置向导。通过管道运行时 Graph 搜索开箱即用，之后可手动运行 `codexray install` 配置 Embedding API。
 
-### 手动下载安装
-
-每个版本提供预编译二进制：
-
-| 平台 | 架构 | 下载文件 |
-|------|------|----------|
-| macOS | Apple Silicon (arm64) | `codexray-darwin-arm64.tar.gz` |
-| macOS | Intel (x64) | `codexray-darwin-x64.tar.gz` |
-| Linux | x64 (glibc) | `codexray-linux-x64.tar.gz` |
-| Linux | x64 (musl, 静态) | `codexray-linux-x64-musl.tar.gz` |
-
-从[最新发布](https://github.com/iohub/codexray/releases/latest)下载对应平台的压缩包，解压后运行 `codexray install`：
+### 手动下载（以 Linux musl 为例）
 
 ```bash
-# macOS (Apple Silicon)
-curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-arm64.tar.gz
+curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64-musl.tar.gz
 tar -xzf codexray.tar.gz
-./codexray install
-
-# macOS (Intel)
-curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-darwin-x64.tar.gz
-tar -xzf codexray.tar.gz
-./codexray install
-
-# Linux (x64 glibc)
-curl -L -o codexray.tar.gz https://github.com/iohub/codexray/releases/latest/download/codexray-linux-x64.tar.gz
-tar -xzf codexray.tar.gz
-./codexray install
+./codexray install && rm codexray.tar.gz
 ```
 
-`install` 命令将 codexray 注册为 Claude Code / Codex CLI 的 MCP 工具。首次运行时还会启动交互式配置向导，引导你配置 Embedding 模型和 API Token。
+其他平台：将 `linux-x64-musl` 替换为 `darwin-arm64`、`darwin-x64` 或 `linux-x64`，文件在[最新发布页](https://github.com/iohub/codexray/releases/latest)。
 
 ### 源码编译
 
 ```bash
-git clone https://github.com/iohub/codexray.git
-cd codexray
-cargo build --release
+git clone https://github.com/iohub/codexray.git && cd codexray
+cargo build --release && ./rust-core/target/release/codexray install
 ```
 
-编译后的二进制位于 `rust-core/target/release/codexray`，直接运行：
-
-```bash
-./rust-core/target/release/codexray install
-```
-
-首次运行时，`./codexray install` 也会启动交互式配置向导。
+首次运行 `./codexray install` 会启动交互式配置向导。
 
 ## 工作原理
 
