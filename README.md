@@ -4,9 +4,21 @@
 
 ## Quick Start
 
-### Download Binary
+### One-curl Install (Recommended)
 
-Pre-built binaries are available for different platforms:
+Auto-detects your OS, architecture, and libc variant:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/superdl/codexray/main/install.sh | sh
+```
+
+After the script completes, restart Claude Code — it will auto-discover codexray's MCP tools.
+
+> **First run:** The script runs `codexray install` interactively if you're in a terminal, or in non-interactive mode if piped. Run `codexray install` manually later to configure your embedding API for semantic search (graph-based search works without configuration).
+
+### Manual Download
+
+Pre-built binaries available for specific platforms:
 
 | Platform | Command |
 |----------|---------|
@@ -14,8 +26,6 @@ Pre-built binaries are available for different platforms:
 | **macOS (Intel)** | `curl -L -o codexray.tar.gz https://github.com/superdl/codexray/releases/latest/download/codexray-darwin-x64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
 | **Linux (glibc)** | `curl -L -o codexray.tar.gz https://github.com/superdl/codexray/releases/latest/download/codexray-linux-x64.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
 | **Linux (musl)** | `curl -L -o codexray.tar.gz https://github.com/superdl/codexray/releases/latest/download/codexray-linux-x64-musl.tar.gz && tar -xzf codexray.tar.gz && ./codexray install` |
-
-> **Note:** On first run, `codexray` will launch an interactive setup wizard to configure your embedding model and API token.
 
 After `./codexray install`, restart Claude Code — it will auto-discover codexray's MCP tools (`codexray_explore`, `codexray_search`, `codexray_find`, `codexray_callers`, `codexray_callees`, `codexray_status`). The server auto-indexes your project on startup and gracefully exits when Claude Code closes — no daemon or manual commands needed.
 
