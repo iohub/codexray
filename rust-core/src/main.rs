@@ -5,6 +5,7 @@ use codexray::config::Config;
 use codexray::mcp;
 use tracing::info;
 use std::path::PathBuf;
+use std::io::{self, Write};
 
 /// 从当前工作目录检测项目根（向上找 .git/）
 fn detect_project() -> Result<PathBuf, String> {
@@ -61,6 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             mcp::server::run_mcp_server().await?;
         }
         Commands::Install { local, global } => {
+            initialize_codexray_dir()?;
             let scope = resolve_scope(*local, *global);
             install_to_claude(scope)?;
             install_to_codex()?;
@@ -152,6 +154,165 @@ fn codexray_bin() -> String {
         .join(bin_name)
         .to_string_lossy()
         .to_string()
+}
+
+/// 初始化 ~/.codexray 目录结构：创建目录、复制二进制、引导用户配置
+fn initialize_codexray_dir() -> Result<(), Box<dyn std::error::Error>> {
+    let codexray_dir = Config::codexray_dir();
+    let bin_dir = Config::bin_dir();
+    let projects_dir = Config::projects_dir();
+    let cache_dir = Config::cache_dir();
+
+    // 1. 创建目录结构
+    for dir in [&codexray_dir, &bin_dir, &projects_dir, &cache_dir] {
+        std::fs::create_dir_all(dir)?;
+    }
+    println!("  [create] Directory: {}", codexray_dir.display());
+
+    // 2. 将当前运行的二进制复制到 ~/.codexray/bin/codexray
+    let current_exe = std::env::current_exe()?;
+    let dest_bin = bin_dir.join(if cfg!(target_os = "windows") { "codexray.exe" } else { "codexray" });
+
+    if current_exe != dest_bin {
+        std::fs::copy(&current_exe, &dest_bin)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&dest_bin, std::fs::Permissions::from_mode(0o755))?;
+        }
+        println!("  [copy] Binary: {} → {}", current_exe.display(), dest_bin.display());
+    } else {
+        println!("  [skip] Binary already in place: {}", dest_bin.display());
+    }
+
+    // 3. 检查是否已有配置
+    let config_path = Config::global_config_path();
+    if config_path.exists() {
+        // 已有配置 — 询问是否重新配置
+        print!("\n  Config already exists at {}. Reconfigure? [y/N] ", config_path.display());
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("  [skip] Keeping existing config.");
+            return Ok(());
+        }
+        println!();
+    }
+
+    // 4. 交互式引导配置
+    println!();
+    println!("  ┌─────────────────────────────────────────────────────────┐");
+    println!("  │          CodeXRay Interactive Setup                     │");
+    println!("  │  Press Enter to accept default values shown in brackets │");
+    println!("  └─────────────────────────────────────────────────────────┘");
+    println!();
+
+    let mut config = if config_path.exists() {
+        Config::load().unwrap_or_default()
+    } else {
+        Config::default()
+    };
+
+    // ── Embedding API 配置 ──────────────────────────────────────────
+    println!("  ── Embedding / Semantic Search ──");
+    println!("  CodeXRay uses an embedding API for semantic code search.");
+    println!("  Leave blank to skip (graph-based search still works).\n");
+    println!("  Recommended: get a free API key from OpenRouter,");
+    println!("  then use their Qwen3-Embedding-4B model for code search.");
+    println!("  https://openrouter.ai/qwen/qwen3-embedding-4b\n");
+
+    let api_token = prompt("  Embedding API token (e.g. OpenRouter API key)", &config.embedding.api_token, true);
+    if !api_token.is_empty() {
+        config.embedding.api_token = api_token;
+
+        config.embedding.api_base_url = prompt(
+            "  API base URL",
+            &config.embedding.api_base_url,
+            false,
+        );
+
+        config.embedding.model = prompt(
+            "  Embedding model",
+            &config.embedding.model,
+            false,
+        );
+
+        config.embedding.provider = prompt(
+            "  Provider",
+            &config.embedding.provider,
+            false,
+        );
+
+        let dims_str = prompt(
+            "  Dimensions",
+            &config.embedding.dimensions.to_string(),
+            false,
+        );
+        if let Ok(d) = dims_str.parse() {
+            config.embedding.dimensions = d;
+        }
+
+        // ── Reranker 配置 ──────────────────────────────────────
+        println!("\n  Recommended reranker: Cohere Rerank 4 Pro via OpenRouter.");
+        println!("  https://openrouter.ai/cohere/rerank-4-pro\n");
+        print!("  Enable reranker for better search results? [y/N] ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        if input.trim().eq_ignore_ascii_case("y") {
+            config.index.reranker.enabled = true;
+
+            let reranker_token = prompt("  Reranker API token", "", true);
+            if !reranker_token.is_empty() {
+                config.index.reranker.api_token = reranker_token;
+            }
+
+            config.index.reranker.model = prompt(
+                "  Reranker model",
+                &config.index.reranker.model,
+                false,
+            );
+
+            config.index.reranker.api_base_url = prompt(
+                "  Reranker API base URL",
+                &config.index.reranker.api_base_url,
+                false,
+            );
+        }
+    } else {
+        config.embedding.api_token = String::new();
+        println!("  [skip] Embedding disabled — only graph-based search will be available.");
+    }
+
+    // 5. 保存配置
+    config.save()?;
+    println!();
+    println!("  ✓ Configuration saved to: {}", config_path.display());
+    println!();
+
+    Ok(())
+}
+
+/// 读取用户输入，提供默认值
+fn prompt(label: &str, default: &str, _sensitive: bool) -> String {
+    if default.is_empty() {
+        print!("  {}: ", label);
+    } else {
+        print!("  {} [{}]: ", label, default);
+    }
+    io::stdout().flush().ok();
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).ok();
+    let trimmed = input.trim().to_string();
+
+    if trimmed.is_empty() {
+        default.to_string()
+    } else {
+        trimmed
+    }
 }
 
 fn mcp_server_entry() -> serde_json::Value {

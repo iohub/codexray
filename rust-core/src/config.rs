@@ -145,6 +145,16 @@ pub struct Config {
     pub installed_hooks: HashMap<String, Vec<String>>,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            embedding: EmbeddingConfig::default(),
+            index: IndexConfig::default(),
+            installed_hooks: HashMap::new(),
+        }
+    }
+}
+
 impl Config {
     /// 全局配置文件路径
     pub fn global_config_path() -> PathBuf {
