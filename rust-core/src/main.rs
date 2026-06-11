@@ -431,7 +431,6 @@ fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
     println!("    codexray_callers  — find all callers of a function/method");
     println!("    codexray_callees  — find all callees (dependencies) of a function");
     println!("    codexray_status   — index health check");
-    println!("    codexray_list     — list indexed projects");
 
     Ok(())
 }

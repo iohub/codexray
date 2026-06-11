@@ -165,9 +165,6 @@ fn handle_tools_call(id: Option<Value>, request: &Value) -> Option<Value> {
             let symbol = arguments.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
             run_cli(&["callees", symbol, "--json"])
         }
-        "codexray_list" => {
-            run_cli(&["list", "--json"])
-        }
         "codexray_status" => {
             run_cli(&["status", "--json"])
         }
@@ -210,7 +207,6 @@ fn format_tool_result(tool_name: &str, output: &str) -> String {
         "codexray_explore" => format_explore(&parsed),
         "codexray_callers" => format_callers(&parsed),
         "codexray_callees" => format_callees(&parsed),
-        "codexray_list" => format_list(&parsed),
         "codexray_status" => format_status(&parsed),
         _ => output.to_string(),
     }
@@ -325,25 +321,6 @@ fn format_callees(results: &Value) -> String {
         let file = r["callee_file"].as_str().unwrap_or("?");
         let line = r["callee_line"].as_u64().unwrap_or(0);
         out.push_str(&format!("\n{}. {}  {}:{}\n", i + 1, callee, file, line));
-    }
-    out
-}
-
-fn format_list(projects: &Value) -> String {
-    let arr = projects.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
-    let mut out = format!("Indexed projects: {}\n", arr.len());
-
-    for (i, p) in arr.iter().enumerate() {
-        let root = p["project_root"].as_str().unwrap_or("?");
-        let hash = p["hash"].as_str().unwrap_or("?");
-        let indexed = p["indexed_at"].as_str().unwrap_or("?");
-        out.push_str(&format!(
-            "\n{}. {}\n   {}  {}\n",
-            i + 1,
-            root,
-            &hash[..8.min(hash.len())],
-            indexed,
-        ));
     }
     out
 }

@@ -144,14 +144,6 @@ pub fn all_tools() -> Vec<Tool> {
         },
         // ── Meta / utility tools ────────────────────────────────────
         Tool {
-            name: "codexray_list".into(),
-            description: "List all projects currently indexed by codexray. Use to discover which codebases are available for search and analysis.".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {}
-            }),
-        },
-        Tool {
             name: "codexray_status".into(),
             description: "Check index freshness — number of indexed functions, files, last update timestamp. Use to verify the index is ready before relying on search or call-graph results.".into(),
             input_schema: serde_json::json!({
