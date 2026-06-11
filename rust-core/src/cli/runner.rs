@@ -796,9 +796,9 @@ fn initialize_codexray_dir() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ── Embedding / Semantic Search ──");
     println!("  CodeXRay uses an embedding API for semantic code search.");
     println!("  Leave blank to skip (graph-based search still works).\n");
-    println!("  Recommended: get a free API key from OpenRouter,");
-    println!("  then use their Qwen3-Embedding-4B model for code search.");
-    println!("  https://openrouter.ai/qwen/qwen3-embedding-4b\n");
+    println!("  You need an OpenAI-compatible embedding API. Common choices:");
+    println!("  - OpenRouter (https://openrouter.ai/qwen/qwen3-embedding-4b)");
+    println!("  - SiliconFlow, or a local vLLM / Ollama endpoint\n");
 
     let api_token = prompt("  Embedding API token (e.g. OpenRouter API key)", &config.embedding.api_token, true);
     if !api_token.is_empty() {
@@ -812,19 +812,17 @@ fn initialize_codexray_dir() -> Result<(), Box<dyn std::error::Error>> {
             config.embedding.dimensions = d;
         }
 
-        // ── Reranker ──────────────────────────────────────────
-        println!("\n  Recommended reranker: Cohere Rerank 4 Pro via OpenRouter.");
-        println!("  https://openrouter.ai/cohere/rerank-4-pro\n");
-        print!("  Enable reranker for better search results? [y/N] ");
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        if input.trim().eq_ignore_ascii_case("y") {
-            config.index.reranker.enabled = true;
-            let reranker_token = prompt("  Reranker API token", "", true);
-            if !reranker_token.is_empty() {
-                config.index.reranker.api_token = reranker_token;
-            }
+        // ── Reranker (enabled by default) ─────────────────────
+        println!("\n  A reranker improves search result quality.");
+        println!("  Example: Rerank model via OpenRouter (https://openrouter.ai/cohere/rerank-4-pro)");
+        println!("  Token is required to enable reranker.\n");
+        config.index.reranker.enabled = true;
+        let reranker_token = prompt("  Reranker API token", "", true);
+        if reranker_token.is_empty() {
+            config.index.reranker.enabled = false;
+            println!("  [skip] Reranker disabled — no token provided.");
+        } else {
+            config.index.reranker.api_token = reranker_token;
             config.index.reranker.model = prompt("  Reranker model", &config.index.reranker.model, false);
             config.index.reranker.api_base_url = prompt("  Reranker API base URL", &config.index.reranker.api_base_url, false);
         }
