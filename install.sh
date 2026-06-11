@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # CodeXRay — one-curl install script
-# Usage: curl -fsSL https://raw.githubusercontent.com/superdl/codexray/main/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/iohub/codexray/main/install.sh | sh
 #
 # Auto-detects OS, architecture, and libc variant, then downloads
 # the correct pre-built binary from GitHub Releases and runs `codexray install`.
@@ -14,7 +14,7 @@
 set -e
 
 # ── Constants ────────────────────────────────────────────────────────────
-REPO="superdl/codexray"
+REPO="iohub/codexray"
 BIN_NAME="codexray"
 GITHUB="https://github.com/${REPO}/releases"
 
