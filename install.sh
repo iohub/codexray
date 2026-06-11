@@ -239,7 +239,7 @@ main() {
 
     # Extract archive
     info "Extracting archive..."
-    tar -xzf "$ARCHIVE_PATH" -C "$TMPDIR"
+    tar -xzf "$ARCHIVE_PATH" -C "$TMPDIR" --strip-components=1
     EXTRACTED_BIN="${TMPDIR}/${BIN_NAME}"
     if [ ! -f "$EXTRACTED_BIN" ]; then
         error "Binary not found in archive (expected '${BIN_NAME}')"
