@@ -767,24 +767,6 @@ fn initialize_codexray_dir() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let config_path = Config::global_config_path();
-    if config_path.exists() {
-        print!("\n  Config already exists at {}. Reconfigure? [y/N] ", config_path.display());
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        if !input.trim().eq_ignore_ascii_case("y") {
-            println!("  [skip] Keeping existing config.");
-            return Ok(());
-        }
-        println!();
-    }
-
-    println!();
-    println!("  ┌─────────────────────────────────────────────────────────┐");
-    println!("  │          CodeXRay Interactive Setup                     │");
-    println!("  │  Press Enter to accept default values shown in brackets │");
-    println!("  └─────────────────────────────────────────────────────────┘");
-    println!();
 
     let mut config = if config_path.exists() {
         Config::load().unwrap_or_default()
@@ -792,43 +774,60 @@ fn initialize_codexray_dir() -> Result<(), Box<dyn std::error::Error>> {
         Config::default()
     };
 
-    // ── Embedding API 配置 ──────────────────────────────────────────
-    println!("  ── Embedding / Semantic Search ──");
-    println!("  CodeXRay uses an embedding API for semantic code search.");
-    println!("  Leave blank to skip (graph-based search still works).\n");
-    println!("  You need an OpenAI-compatible embedding API. Common choices:");
-    println!("  - OpenRouter (https://openrouter.ai/qwen/qwen3-embedding-4b)");
-    println!("  - SiliconFlow, or a local vLLM / Ollama endpoint\n");
-
-    let api_token = prompt("  Embedding API token (e.g. OpenRouter API key)", &config.embedding.api_token, true);
-    if !api_token.is_empty() {
-        config.embedding.api_token = api_token;
-        config.embedding.api_base_url = prompt("  API base URL", &config.embedding.api_base_url, false);
-        config.embedding.model = prompt("  Embedding model", &config.embedding.model, false);
-        config.embedding.provider = prompt("  Provider", &config.embedding.provider, false);
-
-        let dims_str = prompt("  Dimensions", &config.embedding.dimensions.to_string(), false);
-        if let Ok(d) = dims_str.parse() {
-            config.embedding.dimensions = d;
-        }
-
-        // ── Reranker (enabled by default) ─────────────────────
-        println!("\n  A reranker improves search result quality.");
-        println!("  Example: Rerank model via OpenRouter (https://openrouter.ai/cohere/rerank-4-pro)");
-        println!("  Token is required to enable reranker.\n");
-        config.index.reranker.enabled = true;
-        let reranker_token = prompt("  Reranker API token", "", true);
-        if reranker_token.is_empty() {
-            config.index.reranker.enabled = false;
-            println!("  [skip] Reranker disabled — no token provided.");
-        } else {
-            config.index.reranker.api_token = reranker_token;
-            config.index.reranker.model = prompt("  Reranker model", &config.index.reranker.model, false);
-            config.index.reranker.api_base_url = prompt("  Reranker API base URL", &config.index.reranker.api_base_url, false);
-        }
+    // 已有有效 API token → 跳过交互式配置
+    if !config.embedding.api_token.is_empty() {
+        println!();
+        println!("  ┌─────────────────────────────────────────────────────────┐");
+        println!("  │          CodeXRay Interactive Setup                     │");
+        println!("  │  Valid config exists, skipping interactive prompts.     │");
+        println!("  │  Edit ~/.codexray/config.json to reconfigure.           │");
+        println!("  └─────────────────────────────────────────────────────────┘");
+        println!();
+        println!("  [skip] Existing embedding config found, keeping as-is.");
     } else {
-        config.embedding.api_token = String::new();
-        println!("  [skip] Embedding disabled — only graph-based search will be available.");
+        println!();
+        println!("  ┌─────────────────────────────────────────────────────────┐");
+        println!("  │          CodeXRay Interactive Setup                     │");
+        println!("  │  Press Enter to accept default values shown in brackets │");
+        println!("  └─────────────────────────────────────────────────────────┘");
+        // ── Embedding API 配置 ──────────────────────────────────
+        println!("  ── Embedding / Semantic Search ──");
+        println!("  CodeXRay uses an embedding API for semantic code search.");
+        println!("  Leave blank to skip (graph-based search still works).\n");
+        println!("  You need an OpenAI-compatible embedding API. Common choices:");
+        println!("  - OpenRouter (https://openrouter.ai/qwen/qwen3-embedding-4b)");
+        println!("  - SiliconFlow, or a local vLLM / Ollama endpoint\n");
+
+        let api_token = prompt("  Embedding API token (e.g. OpenRouter API key)", "", true);
+        if !api_token.is_empty() {
+            config.embedding.api_token = api_token;
+            config.embedding.api_base_url = prompt("  API base URL", &config.embedding.api_base_url, false);
+            config.embedding.model = prompt("  Embedding model", &config.embedding.model, false);
+            config.embedding.provider = prompt("  Provider", &config.embedding.provider, false);
+
+            let dims_str = prompt("  Dimensions", &config.embedding.dimensions.to_string(), false);
+            if let Ok(d) = dims_str.parse() {
+                config.embedding.dimensions = d;
+            }
+
+            // ── Reranker (enabled by default) ──────────────────
+            println!("\n  A reranker improves search result quality.");
+            println!("  Example: Rerank model via OpenRouter (https://openrouter.ai/cohere/rerank-4-pro)");
+            println!("  Token is required to enable reranker.\n");
+            config.index.reranker.enabled = true;
+            let reranker_token = prompt("  Reranker API token", "", true);
+            if reranker_token.is_empty() {
+                config.index.reranker.enabled = false;
+                println!("  [skip] Reranker disabled — no token provided.");
+            } else {
+                config.index.reranker.api_token = reranker_token;
+                config.index.reranker.model = prompt("  Reranker model", &config.index.reranker.model, false);
+                config.index.reranker.api_base_url = prompt("  Reranker API base URL", &config.index.reranker.api_base_url, false);
+            }
+        } else {
+            config.embedding.api_token = String::new();
+            println!("  [skip] Embedding disabled — only graph-based search will be available.");
+        }
     }
 
     config.save()?;
