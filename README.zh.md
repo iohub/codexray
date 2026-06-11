@@ -20,7 +20,7 @@
 
 ### ⚡ 实时增量索引
 
-首次全量构建，之后仅重处理变更文件（MD5 对比）。三种触发模式：MCP 启动时、Git hook 提交时、文件监听守护进程。自动清理已删除文件的孤儿 Embedding，索引永不膨胀。
+首次全量构建，之后仅重处理变更文件（MD5 对比）。MCP 启动时自动索引，运行时增量监听文件变更。自动清理已删除文件的孤儿 Embedding，索引永不膨胀。
 
 ### 🔌 原生 MCP，本地化部署
 
@@ -72,7 +72,7 @@ cargo build --release && ./rust-core/target/release/codexray install
   → 保存到 ~/.codexray/<project_hash>/
 ```
 
-**幂等性**：索引构建是增量的——首次全量构建，后续运行通过 MD5 哈希对比，仅重处理变更文件。使用 `codexray install-hooks` 可在 git commit/merge 时自动重索引，或使用 `codexray daemon` 实现实时文件监听。
+**幂等性**：索引构建是增量的——首次全量构建，后续运行通过 MD5 哈希对比，仅重处理变更文件。
 
 ### 混合搜索管道
 
@@ -138,7 +138,7 @@ MCP 服务器自动集成所有三种模式：启动时初始索引、运行时�
   - `file_hashes.json` — MD5 增量追踪
   - `embedding_hashes.json` — Embedding 增量追踪
 
-无守护进程，无 HTTP 服务（除非运行 `daemon` 或 `serve --mcp`）。所有 CLI 命令均为独立进程。
+无守护进程，无 HTTP 服务。所有 CLI 命令均为独立进程。
 
 ## 支持的语言
 

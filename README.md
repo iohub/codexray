@@ -22,7 +22,7 @@ Call graph + code vectors + commit vectors + knowledge vectors — four dimensio
 
 ### ⚡ Real-time Incremental Indexing
 
-Full build on first run, only re-processes changed files thereafter (MD5 diff). Three trigger modes: MCP startup, git hooks, file watcher daemon. Auto-cleans orphaned embeddings — index never bloats.
+Full build on first run, only re-processes changed files thereafter (MD5 diff). Auto-indexes on MCP startup and watches file changes during runtime. Auto-cleans orphaned embeddings — index never bloats.
 
 ### 🔌 Native MCP, Local-First
 
@@ -72,7 +72,7 @@ Source files
   → Save to ~/.codexray/<project_hash>/
 ```
 
-**Idempotent**: index builds are incremental — the first run is a full build, subsequent runs compare MD5 hashes and only re-process changed files. Use `codexray install-hooks` for automatic re-indexing on git commit/merge, or `codexray daemon` for real-time file watching.
+**Idempotent**: index builds are incremental — the first run is a full build, subsequent runs compare MD5 hashes and only re-process changed files.
 
 ### Hybrid Search Pipeline (`codexray search`)
 
@@ -121,11 +121,9 @@ If embedding/reranker are unavailable, the pipeline falls back gracefully to gra
 
 | Mode | When | Trigger |
 |------|------|---------|
-| **Git hooks** | On commit/merge | `codexray install-hooks` |
-| **Daemon** | On file change (8s debounce) | `codexray daemon` |
 | **MCP server** | On startup + file changes | `codexray install` + restart Claude Code |
 
-The MCP server automatically runs all three: initial index on startup, file watching during runtime, and CLAUDE.md injection for tool discovery.
+The MCP server automatically indexes on startup, watches file changes during runtime, and injects CLAUDE.md for tool discovery.
 
 ### Storage
 
@@ -138,7 +136,7 @@ The MCP server automatically runs all three: initial index on startup, file watc
   - `file_hashes.json` — MD5 incremental tracking
   - `embedding_hashes.json` — Embedding incremental tracking
 
-No daemon, no HTTP server (unless running `daemon` or `serve --mcp`). Every CLI command is a standalone process.
+No daemon, no HTTP server. Every CLI command is a standalone process.
 
 ## Supported Languages
 
