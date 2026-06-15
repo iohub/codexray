@@ -61,6 +61,11 @@ openssl-sys = { version = "0.9", features = ["vendored"] }
 # 文件系统监控 (MCP server 自动索引)
 notify = "7"
 
+# TUI interactive prompts
+dialoguer = "0.11"
+indicatif = "0.17"
+console = "0.15"
+
 # Unix daemon support (fork, setsid)
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

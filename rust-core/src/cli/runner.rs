@@ -7,6 +7,9 @@ use crate::services::RerankerService;
 use crate::services::hybrid_search::HybridSearchService;
 use crate::storage::TantivyBm25Index;
 use crate::codegraph::types::PetCodeGraph;
+use console::style;
+use dialoguer::{Confirm, Input, Select};
+use indicatif::{ProgressBar, ProgressStyle};
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -746,24 +749,36 @@ fn initialize_codexray_dir() -> Result<(), Box<dyn std::error::Error>> {
     let projects_dir = Config::projects_dir();
     let cache_dir = Config::cache_dir();
 
+    // ── 1. 创建目录结构 ──────────────────────────────────────
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(ProgressStyle::default_spinner()
+        .tick_strings(&["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"])
+        .template("{spinner:.green} {msg}")?);
+    pb.set_message("Creating directories...");
     for dir in [&codexray_dir, &bin_dir, &projects_dir, &cache_dir] {
         std::fs::create_dir_all(dir)?;
     }
-    println!("  [create] Directory: {}", codexray_dir.display());
+    pb.finish_with_message(format!("{} {}", style("✔").green(), style("Directories created").bold()));
 
+    // ── 2. 复制二进制 ─────────────────────────────────────────
     let current_exe = std::env::current_exe()?;
     let dest_bin = bin_dir.join(if cfg!(target_os = "windows") { "codexray.exe" } else { "codexray" });
 
     if current_exe != dest_bin {
+        let pb2 = ProgressBar::new_spinner();
+        pb2.set_style(ProgressStyle::default_spinner()
+            .tick_strings(&["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"])
+            .template("{spinner:.green} {msg}")?);
+        pb2.set_message("Installing binary...");
         std::fs::copy(&current_exe, &dest_bin)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&dest_bin, std::fs::Permissions::from_mode(0o755))?;
         }
-        println!("  [copy] Binary: {} → {}", current_exe.display(), dest_bin.display());
+        pb2.finish_with_message(format!("{} Binary installed", style("✔").green()));
     } else {
-        println!("  [skip] Binary already in place: {}", dest_bin.display());
+        println!("{} {}", style("✔").green(), style("Binary already in place").dim());
     }
 
     let config_path = Config::global_config_path();
@@ -774,84 +789,145 @@ fn initialize_codexray_dir() -> Result<(), Box<dyn std::error::Error>> {
         Config::default()
     };
 
-    // 已有有效 API token → 跳过交互式配置
+    // ── 已有有效 API token → 跳过交互式配置 ──────────────────
     if !config.embedding.api_token.is_empty() {
         println!();
-        println!("  ┌─────────────────────────────────────────────────────────┐");
-        println!("  │          CodeXRay Interactive Setup                     │");
-        println!("  │  Valid config exists, skipping interactive prompts.     │");
-        println!("  │  Edit ~/.codexray/config.json to reconfigure.           │");
-        println!("  └─────────────────────────────────────────────────────────┘");
+        println!("{} {}", style("✔").green(), style("Valid config exists — skipping setup.").bold());
+        println!("  {}", style("Edit ~/.codexray/config.json to reconfigure.").dim());
         println!();
-        println!("  [skip] Existing embedding config found, keeping as-is.");
-    } else {
-        println!();
-        println!("  ┌─────────────────────────────────────────────────────────┐");
-        println!("  │          CodeXRay Interactive Setup                     │");
-        println!("  │  Press Enter to accept default values shown in brackets │");
-        println!("  └─────────────────────────────────────────────────────────┘");
-        // ── Embedding API 配置 ──────────────────────────────────
-        println!("  ── Embedding / Semantic Search ──");
-        println!("  CodeXRay uses an embedding API for semantic code search.");
-        println!("  Leave blank to skip (graph-based search still works).\n");
-        println!("  You need an OpenAI-compatible embedding API. Common choices:");
-        println!("  - OpenRouter (https://openrouter.ai/qwen/qwen3-embedding-4b)");
-        println!("  - SiliconFlow, or a local vLLM / Ollama endpoint\n");
-
-        let api_token = prompt("  Embedding API token (e.g. OpenRouter API key)", "", true);
-        if !api_token.is_empty() {
-            config.embedding.api_token = api_token;
-            config.embedding.api_base_url = prompt("  API base URL", &config.embedding.api_base_url, false);
-            config.embedding.model = prompt("  Embedding model", &config.embedding.model, false);
-            config.embedding.provider = prompt("  Provider", &config.embedding.provider, false);
-
-            let dims_str = prompt("  Dimensions", &config.embedding.dimensions.to_string(), false);
-            if let Ok(d) = dims_str.parse() {
-                config.embedding.dimensions = d;
-            }
-
-            // ── Reranker (enabled by default) ──────────────────
-            println!("\n  A reranker improves search result quality.");
-            println!("  Example: Rerank model via OpenRouter (https://openrouter.ai/cohere/rerank-4-pro)");
-            println!("  Token is required to enable reranker.\n");
-            config.index.reranker.enabled = true;
-            let reranker_token = prompt("  Reranker API token", "", true);
-            if reranker_token.is_empty() {
-                config.index.reranker.enabled = false;
-                println!("  [skip] Reranker disabled — no token provided.");
-            } else {
-                config.index.reranker.api_token = reranker_token;
-                config.index.reranker.model = prompt("  Reranker model", &config.index.reranker.model, false);
-                config.index.reranker.api_base_url = prompt("  Reranker API base URL", &config.index.reranker.api_base_url, false);
-            }
-        } else {
-            config.embedding.api_token = String::new();
-            println!("  [skip] Embedding disabled — only graph-based search will be available.");
-        }
+        config.save()?;
+        return Ok(());
     }
 
+    // ── 交互式引导 ────────────────────────────────────────────
+    println!();
+    println!("{}", style("╔══════════════════════════════════════╗").cyan());
+    println!("{}", style("║       CodeXRay Interactive Setup     ║").cyan().bold());
+    println!("{}", style("╚══════════════════════════════════════╝").cyan());
+    println!();
+
+    // ── Embedding API 配置 ────────────────────────────────────
+    println!("{}", style("── Step 1: Embedding Configuration ──").bold());
+    println!();
+    println!("  CodeXRay uses an embedding API for semantic code search.");
+    println!("  Basic features (call graph, name search) work WITHOUT it.");
+    println!();
+
+    let setup_embedding = Confirm::new()
+        .with_prompt("Configure embedding API for semantic search?")
+        .default(true)
+        .interact()?;
+
+    if !setup_embedding {
+        config.embedding.api_token = String::new();
+        println!("{} Embedding disabled — graph-based search only.", style("➜").yellow());
+        config.save()?;
+        println!();
+        println!("{} {}", style("✔").green(), style(format!("Configuration saved to {}", config_path.display())).bold());
+        println!();
+        return Ok(());
+    }
+
+    // ── API Token ─────────────────────────────────────────────
+    let api_token: String = Input::<String>::new()
+        .with_prompt("API Token")
+        .interact_text()?;
+
+    if api_token.trim().len() < 5 {
+        println!("{} No valid API token provided — skipping embedding.", style("⚠").yellow());
+        config.embedding.api_token = String::new();
+        config.save()?;
+        println!();
+        println!("{} {}", style("✔").green(), style(format!("Configuration saved to {}", config_path.display())).bold());
+        println!();
+        return Ok(());
+    }
+
+    config.embedding.api_token = api_token.trim().to_string();
+    config.embedding.provider = "openai-compatible".to_string();
+
+    // ── API Base URL ──────────────────────────────────────────
+    let api_base_url: String = Input::<String>::new()
+        .with_prompt("API Base URL")
+        .default("https://api.siliconflow.cn/v1".to_string())
+        .interact_text()?;
+    config.embedding.api_base_url = api_base_url.trim().to_string();
+
+    // ── Model ─────────────────────────────────────────────────
+    let model: String = Input::<String>::new()
+        .with_prompt("Embedding model")
+        .default("Qwen/Qwen3-Embedding-4B".to_string())
+        .interact_text()?;
+    config.embedding.model = model.trim().to_string();
+
+    // ── Step 2: Reranker ──────────────────────────────────────
+    println!();
+    println!("{}", style("── Step 2: Reranker Configuration ──").bold());
+    println!();
+    println!("  A reranker improves search result quality by re-scoring candidates.");
+
+    let enable_reranker = Confirm::new()
+        .with_prompt("Enable reranker for better search quality?")
+        .default(true)
+        .interact()?;
+
+    if enable_reranker {
+        config.index.reranker.enabled = true;
+
+        let reranker_token: String = Input::<String>::new()
+            .with_prompt("Reranker API Token")
+            .interact_text()?;
+
+        if reranker_token.trim().is_empty() {
+            config.index.reranker.enabled = false;
+            println!("{} Reranker disabled — no token provided.", style("➜").yellow());
+        } else {
+            config.index.reranker.api_token = reranker_token.trim().to_string();
+
+            let reranker_models = vec![
+                "Qwen/Qwen3-Reranker-4B       (SiliconFlow)",
+                "cohere/rerank-4-pro           (OpenRouter)",
+                "BAAI/bge-reranker-v2-m3       (local/vLLM)",
+                "Custom model",
+            ];
+            let reranker_idx = Select::new()
+                .with_prompt("Choose a reranker model")
+                .items(&reranker_models)
+                .default(0)
+                .interact()?;
+
+            let (default_reranker_model, default_reranker_url) = match reranker_idx {
+                0 => ("Qwen/Qwen3-Reranker-4B".to_string(), config.embedding.api_base_url.clone()),
+                1 => ("cohere/rerank-4-pro".to_string(), "https://openrouter.ai/api/v1".to_string()),
+                2 => ("BAAI/bge-reranker-v2-m3".to_string(), "https://api.siliconflow.cn/v1".to_string()),
+                _ => (config.index.reranker.model.clone(), config.index.reranker.api_base_url.clone()),
+            };
+
+            let reranker_model: String = Input::<String>::new()
+                .with_prompt("Reranker model")
+                .default(default_reranker_model)
+                .interact_text()?;
+            config.index.reranker.model = reranker_model.trim().to_string();
+
+            let reranker_url: String = Input::<String>::new()
+                .with_prompt("Reranker API Base URL")
+                .default(default_reranker_url)
+                .interact_text()?;
+            config.index.reranker.api_base_url = reranker_url.trim().to_string();
+        }
+    } else {
+        config.index.reranker.enabled = false;
+        println!("{} Reranker disabled.", style("➜").yellow());
+    }
+
+    // ── 保存配置 ──────────────────────────────────────────────
     config.save()?;
     println!();
-    println!("  ✓ Configuration saved to: {}", config_path.display());
+    println!("{} {}", style("✔").green(), style(format!("Configuration saved to {}", config_path.display())).bold());
+    println!("  Run {} to build your first index!", style("codexray init").cyan());
     println!();
 
     Ok(())
-}
-
-/// 读取用户输入，提供默认值
-fn prompt(label: &str, default: &str, _sensitive: bool) -> String {
-    if default.is_empty() {
-        print!("  {}: ", label);
-    } else {
-        print!("  {} [{}]: ", label, default);
-    }
-    io::stdout().flush().ok();
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).ok();
-    let trimmed = input.trim().to_string();
-
-    if trimmed.is_empty() { default.to_string() } else { trimmed }
 }
 
 fn mcp_server_entry() -> serde_json::Value {
