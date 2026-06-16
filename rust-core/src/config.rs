@@ -133,7 +133,7 @@ impl Default for IndexConfig {
     }
 }
 
-/// 全局配置（~/.codexray/config.json）
+/// 全局配置（~/.codexray/config.json） — CodeXray
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
     #[serde(default)]
@@ -174,7 +174,7 @@ impl Config {
         home.join(".codexray").join("projects").join(project_hash)
     }
 
-    /// Codexray 全局配置根目录: ~/.codexray/
+    /// CodeXray 全局配置根目录: ~/.codexray/
     pub fn codexray_dir() -> PathBuf {
         let home = dirs::home_dir().unwrap_or_default();
         home.join(".codexray")
@@ -209,7 +209,7 @@ impl Config {
 
         if !config_path.exists() {
             return Err(format!(
-                "Config file not found at {:?}. Run 'codexray' to set up.",
+                "Config file not found at {:?}. Run 'CodeXray' to set up.",
                 config_path
             ).into());
         }

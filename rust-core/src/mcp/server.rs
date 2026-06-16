@@ -15,9 +15,9 @@ pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
     // ── Inject CLAUDE.md instructions ──
     if let Some(ref root) = project_root {
         match claude_md::inject_claude_md(root) {
-            Ok(true) => eprintln!("[codexray] Injected codexray instructions into CLAUDE.md"),
+            Ok(true) => eprintln!("[CodeXray] Injected CodeXray instructions into CLAUDE.md"),
             Ok(false) => {} // already present
-            Err(e) => eprintln!("[codexray] CLAUDE.md injection skipped: {}", e),
+            Err(e) => eprintln!("[CodeXray] CLAUDE.md injection skipped: {}", e),
         }
     }
 
@@ -25,16 +25,16 @@ pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
     let _watcher = match project_root.clone() {
         Some(ref root) => match watcher::start_watcher(root.clone()) {
             Ok(handle) => {
-                eprintln!("[codexray] Watching {} for changes...", root.display());
+                eprintln!("[CodeXray] Watching {} for changes...", root.display());
                 Some(handle)
             }
             Err(e) => {
-                eprintln!("[codexray] Watcher unavailable: {}", e);
+                eprintln!("[CodeXray] Watcher unavailable: {}", e);
                 None
             }
         },
         None => {
-            eprintln!("[codexray] No project root found (no .git/). Watching disabled.");
+            eprintln!("[CodeXray] No project root found (no .git/). Watching disabled.");
             None
         }
     };
@@ -42,10 +42,10 @@ pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
     // ── Run initial index in background on startup ──
     if let Some(root) = project_root {
         tokio::task::spawn_blocking(move || {
-            eprintln!("[codexray] Running initial index for {}...", root.display());
+            eprintln!("[CodeXray] Running initial index for {}...", root.display());
             match run_cli(&["init"]) {
-                Ok(_) => eprintln!("[codexray] Initial index complete."),
-                Err(e) => eprintln!("[codexray] Initial index warning: {}", e),
+                Ok(_) => eprintln!("[CodeXray] Initial index complete."),
+                Err(e) => eprintln!("[CodeXray] Initial index warning: {}", e),
             }
         });
     }
@@ -101,7 +101,7 @@ fn handle_initialize(id: Option<Value>) -> Option<Value> {
                 "tools": {}
             },
             "serverInfo": {
-                "name": "codexray",
+                "name": "CodeXray",
                 "version": env!("CARGO_PKG_VERSION")
             },
             "instructions": concat!(
@@ -121,9 +121,9 @@ fn handle_initialize(id: Option<Value>) -> Option<Value> {
                 "RIGHT: user asks \"how does indexing work\" → codexray_explore(\"code indexing\") → immediate answer\n",
                 "\n",
                 "CRITICAL — always relay results to the user:\n",
-                "After every codexray tool call, summarize what was found in your response.\n",
+                "After every CodeXray tool call, summarize what was found in your response.\n",
                 "Tell the user: how many results, key function names, and relevant file paths.\n",
-                "Never use a codexray tool silently."
+                "Never use a CodeXray tool silently."
             )
         }
     }))
@@ -340,7 +340,7 @@ fn format_status(status: &Value) -> String {
     )
 }
 
-/// Run the codexray CLI binary and capture its stdout.
+/// Run the CodeXray CLI binary and capture its stdout.
 fn run_cli(args: &[&str]) -> Result<String, String> {
     let bin = std::env::current_exe()
         .map_err(|e| format!("Failed to get binary path: {}", e))?;
@@ -350,7 +350,7 @@ fn run_cli(args: &[&str]) -> Result<String, String> {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .output()
-        .map_err(|e| format!("Failed to run codexray: {}", e))?;
+        .map_err(|e| format!("Failed to run CodeXray: {}", e))?;
 
     if output.status.success() {
         String::from_utf8(output.stdout)
@@ -359,11 +359,11 @@ fn run_cli(args: &[&str]) -> Result<String, String> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         if stderr.is_empty() && stdout.is_empty() {
-            Err(format!("codexray exited with {}", output.status))
+            Err(format!("CodeXray exited with {}", output.status))
         } else if stderr.is_empty() {
-            Err(format!("codexray exited with {}: {}", output.status, stdout.trim()))
+            Err(format!("CodeXray exited with {}: {}", output.status, stdout.trim()))
         } else {
-            Err(format!("codexray exited with {}: {}", output.status, stderr.trim()))
+            Err(format!("CodeXray exited with {}: {}", output.status, stderr.trim()))
         }
     }
 }

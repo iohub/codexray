@@ -2,7 +2,7 @@
   <img src="assets/logo.png" alt="CodeActor Logo" width="120"/>
 </p>
 
-<h1 align="center">CodeActor CodeXRay</h1>
+<h1 align="center">CodeActor CodeXray</h1>
 
 <p align="center">
   <b>A Dual-Engine Code Intelligence & Retrieval System</b> <br>
@@ -21,7 +21,7 @@
 
 ## 🔥 Overview
 
-**CodeActor CodeXRay** is a high-performance code intelligence and retrieval system built with **Rust**. Think of it as a **CT scan for your codebase** — it doesn't just parse your source code; it builds a complete **function call graph** AND a **semantic vector index**, then fuses them together through a sophisticated hybrid retrieval pipeline.
+**CodeActor CodeXray** is a high-performance code intelligence and retrieval system built with **Rust**. Think of it as a **CT scan for your codebase** — it doesn't just parse your source code; it builds a complete **function call graph** AND a **semantic vector index**, then fuses them together through a sophisticated hybrid retrieval pipeline.
 
 > 🎯 **Core Value**: Transform your chaotic codebase into a navigable, searchable, and machine-understandable knowledge graph.
 

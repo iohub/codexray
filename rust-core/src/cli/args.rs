@@ -18,7 +18,7 @@ impl Default for StorageMode {
 }
 
 #[derive(Parser, Debug)]
-#[clap(name = "codexray", author, version, about = "Code intelligence CLI tool", long_about = None)]
+#[clap(name = "codexray", author, version, about = "CodeXray — Code intelligence CLI tool", long_about = None)]
 pub struct Cli {
     /// Verbose mode
     #[clap(short, long, action)]
@@ -95,7 +95,7 @@ pub enum Commands {
         #[clap(long, action)]
         mcp: bool,
     },
-    /// Register codexray as MCP tools in Claude Code / Codex
+    /// Register CodeXray as MCP tools in Claude Code / Codex
     Install {
         /// Use local .mcp.json (project-level, not global ~/.claude.json)
         #[clap(long, action)]
@@ -104,7 +104,7 @@ pub enum Commands {
         #[clap(long, action)]
         global: bool,
     },
-    /// Remove codexray MCP integration from Claude Code / Codex
+    /// Remove CodeXray MCP integration from Claude Code / Codex
     Uninstall {
         /// Remove from local .mcp.json only
         #[clap(long, action)]
@@ -113,7 +113,7 @@ pub enum Commands {
         #[clap(long, action)]
         global: bool,
     },
-    /// Install git hooks (post-commit, post-merge → codexray init)
+    /// Install git hooks (post-commit, post-merge → CodeXray init)
     InstallHooks,
     /// Start background daemon: watch files and auto-index in real-time
     Daemon {

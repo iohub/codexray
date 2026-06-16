@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# CodeXRay — one-curl install script
+# CodeXray — one-curl install script
 # Usage: curl -fsSL https://raw.githubusercontent.com/iohub/codexray/main/install.sh | sh
 #
 # Auto-detects OS, architecture, and libc variant, then downloads
@@ -200,7 +200,7 @@ verify_checksum() {
 main() {
     printf "${CYAN}"
     printf "  ╔══════════════════════════════════════════╗\n"
-    printf "  ║          CodeXRay Installer              ║\n"
+    printf "  ║          CodeXray Installer              ║\n"
     printf "  ║  Code intelligence MCP server for Claude  ║\n"
     printf "  ╚══════════════════════════════════════════╝${NC}\n"
 
@@ -299,7 +299,7 @@ main() {
             ;;
     esac
 
-    printf "  Restart Claude Code — it will auto-discover codexray MCP tools.\n"
+    printf "  Restart Claude Code — it will auto-discover CodeXray MCP tools.\n"
     printf "\n"
     printf "  ${GREEN}Installation complete!${NC}\n"
     printf "\n"

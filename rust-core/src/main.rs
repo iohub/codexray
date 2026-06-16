@@ -12,7 +12,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 /// 从当前工作目录检测项目根（向上找 .git/）
 fn detect_project() -> Result<PathBuf, String> {
     Config::detect_project_root()
-        .ok_or_else(|| "No project found. Run codexray from within a git repository.".to_string())
+        .ok_or_else(|| "No project found. Run CodeXray from within a git repository.".to_string())
 }
 
 #[tokio::main]
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Serve { mcp } => {
             if !mcp {
-                eprintln!("Use 'codexray serve --mcp' for MCP stdio mode.");
+                eprintln!("Use 'CodeXray serve --mcp' for MCP stdio mode.");
                 return Ok(());
             }
             mcp::server::run_mcp_server().await?;
@@ -91,7 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let hooks_dir = git_dir.join("hooks");
             std::fs::create_dir_all(&hooks_dir)?;
 
-            let hook_script = "#!/bin/sh\n# Codexray auto-index hook\ncodexray init\n";
+            let hook_script = "#!/bin/sh\n# CodeXray auto-index hook\ncodexray init\n";
 
             for hook_name in &["post-commit", "post-merge"] {
                 let hook_path = hooks_dir.join(hook_name);
@@ -114,7 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             println!("Git hooks installed: post-commit, post-merge");
-            println!("Each hook runs 'codexray init' for incremental indexing.");
+            println!("Each hook runs 'CodeXray init' for incremental indexing.");
         }
     }
 
@@ -158,7 +158,7 @@ fn codexray_bin() -> String {
         .to_string()
 }
 
-/// 初始化 ~/.codexray 目录结构：创建目录、复制二进制、引导用户配置
+/// 初始化 ~/.codexray 目录结构：创建目录、复制二进制、引导用户配置 — CodeXray
 fn initialize_codexray_dir() -> Result<(), Box<dyn std::error::Error>> {
     let codexray_dir = Config::codexray_dir();
     let bin_dir = Config::bin_dir();
@@ -376,7 +376,7 @@ fn codex_config_path() -> PathBuf {
 }
 
 fn install_to_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Installing codexray MCP server to Claude Code ({})...\n", scope);
+    println!("Installing CodeXray MCP server to Claude Code ({})...\n", scope);
 
     let (mcp_path, settings_path) = match scope {
         Scope::Local => (claude_local_mcp_path(), claude_settings_path(Scope::Local)),
@@ -474,7 +474,7 @@ fn install_to_codex() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    println!("\nInstalling codexray MCP server to Codex CLI...\n");
+    println!("\nInstalling CodeXray MCP server to Codex CLI...\n");
 
     let toml_block = format!(
         "[mcp_servers.codexray]\ncommand = \"{}\"\nargs = [\"serve\", \"--mcp\"]\n",
@@ -516,7 +516,7 @@ fn install_to_codex() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn uninstall_from_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Removing codexray MCP server from Claude Code ({})...\n", scope);
+    println!("Removing CodeXray MCP server from Claude Code ({})...\n", scope);
 
     let mcp_path = match scope {
         Scope::Local => claude_local_mcp_path(),
@@ -537,7 +537,7 @@ fn uninstall_from_claude(scope: Scope) -> Result<(), Box<dyn std::error::Error>>
         }
     }
     if !removed_mcp {
-        println!("  [skip] No codexray entry in {}", mcp_path.display());
+        println!("  [skip] No CodeXray entry in {}", mcp_path.display());
     }
 
     // Clean up permissions
@@ -579,7 +579,7 @@ fn uninstall_from_codex() -> Result<(), Box<dyn std::error::Error>> {
             println!("  [remove] Codex config: {}", config_path.display());
             println!("  ✓ CodeXray MCP server unregistered from Codex CLI.");
         } else {
-            println!("  [skip] No codexray entry in {}", config_path.display());
+            println!("  [skip] No CodeXray entry in {}", config_path.display());
         }
     }
     Ok(())

@@ -1,4 +1,4 @@
-# CodeXRay
+# CodeXray
 
 **Code search & knowledge engine for the AI era.** Semantic + full-text hybrid search, real-time indexing, call graph + code vectors + commit vectors + knowledge vectors — unified into one native MCP server.
 
@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/iohub/codexray/main/install.sh | sh
 
 Auto-detects OS/arch/libc, downloads, installs, and registers MCP. Restart Claude Code after — done.
 
-**First run:** `codexray install` auto-launches an interactive setup wizard for the embedding API (graph search works without configuration).
+**First run:** `codexray install` auto-launches an interactive setup wizard for the embedding API (graph search works without configuration). CodeXray works out of the box for call graph and name search.
 
 ### Manual download (Linux musl example)
 
@@ -74,7 +74,7 @@ Source files
 
 **Idempotent**: index builds are incremental — the first run is a full build, subsequent runs compare MD5 hashes and only re-process changed files.
 
-### Hybrid Search Pipeline (`codexray search`)
+### Hybrid Search Pipeline (`CodeXray search`)
 
 ```
                         ┌─────────────────────┐

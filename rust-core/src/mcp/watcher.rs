@@ -2,7 +2,7 @@
 //!
 //! When the MCP server starts, it detects the project root and spawns a
 //! background task that watches source files for changes. After a quiet
-//! period (debounce), it triggers `codexray init` as a subprocess for
+//! period (debounce), it triggers `CodeXray init` as a subprocess for
 //! incremental re-indexing.
 //!
 //! The watcher lifecycle is tied to `FileWatcherHandle`: when the handle
@@ -102,19 +102,19 @@ pub fn start_watcher(
                     }
                 }
                 Err(e) => {
-                    eprintln!("[codexray] Watch error: {}", e);
+                    eprintln!("[CodeXray] Watch error: {}", e);
                 }
             },
         ) {
             Ok(w) => w,
             Err(e) => {
-                eprintln!("[codexray] Failed to create file watcher: {}", e);
+                eprintln!("[CodeXray] Failed to create file watcher: {}", e);
                 return;
             }
         };
 
         if let Err(e) = watcher.watch(&root, RecursiveMode::Recursive) {
-            eprintln!("[codexray] Failed to watch {}: {}", root.display(), e);
+            eprintln!("[CodeXray] Failed to watch {}: {}", root.display(), e);
             return;
         }
 
@@ -173,12 +173,12 @@ fn should_trigger_reindex(event: &Event) -> bool {
     false
 }
 
-/// Spawn `codexray init` as a subprocess to re-index the project.
+/// Spawn `CodeXray init` as a subprocess to re-index the project.
 async fn run_index_subprocess() {
     let bin = match std::env::current_exe() {
         Ok(b) => b,
         Err(e) => {
-            eprintln!("[codexray] Cannot find binary: {}", e);
+            eprintln!("[CodeXray] Cannot find binary: {}", e);
             return;
         }
     };
@@ -191,14 +191,14 @@ async fn run_index_subprocess() {
         .await
     {
         Ok(output) if output.status.success() => {
-            eprintln!("[codexray] Index updated.");
+            eprintln!("[CodeXray] Index updated.");
         }
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            eprintln!("[codexray] Index update failed: {}", stderr.trim());
+            eprintln!("[CodeXray] Index update failed: {}", stderr.trim());
         }
         Err(e) => {
-            eprintln!("[codexray] Failed to spawn init: {}", e);
+            eprintln!("[CodeXray] Failed to spawn init: {}", e);
         }
     }
 }

@@ -9,7 +9,7 @@ pub struct Tool {
     pub input_schema: serde_json::Value,
 }
 
-/// All codexray MCP tools.
+/// All CodeXray MCP tools.
 ///
 /// Design principle: each description leads with a TRIGGER ("When user asks X...")
 /// not a feature description. This ensures LLMs pattern-match the tool to the task

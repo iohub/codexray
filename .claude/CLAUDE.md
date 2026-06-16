@@ -1,9 +1,9 @@
 # Project Instructions
 
-<!-- CODERAY_INJECTION -->
-# Code exploration: use codexray MCP tools first
+<!-- CODEXRAY_INJECTION -->
+# Code exploration: use CodeXray MCP tools first
 
-Before any Grep/Glob/Bash for code search, try codexray tools first.
+Before any Grep/Glob/Bash for code search, try CodeXray tools first.
 They give you AST-verified definitions with signatures and line numbers.
 
 Tool priority (use in this order):
@@ -14,4 +14,4 @@ Tool priority (use in this order):
 5. codexray_callees("fn")             — to understand internal dependencies
 6. Grep — ONLY for exact strings (error messages, UUIDs, log formats)
 7. Glob — ONLY when you already know the exact filename pattern
-<!-- /CODERAY_INJECTION -->
+<!-- /CODEXRAY_INJECTION -->
